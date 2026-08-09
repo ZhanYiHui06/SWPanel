@@ -202,6 +202,42 @@ Reason:
 
 ---
 
+### Decision: Review 不单独设计复杂审核页面
+
+Status: Accepted
+
+Reason:
+
+Review 只是自动建模与报价之间的一道人工作业闸门，不需要演变成独立审批系统。
+
+审核操作直接放在 Model 详情页，不引入审核中、待复审、二级审核、多级审批等额外状态。
+
+---
+
+### Decision: Rejected 时审核意见必填并自动进入 Modeling Feedback
+
+Status: Accepted
+
+Reason:
+
+退回模型的核心价值是明确指出 Agent 建模错误，并让下一次 Modeling Run 获得可复用的纠错上下文。
+
+用户退回 Model 时必须填写原因；提交后该意见自动写入当前 Drawing Revision 的 Modeling Feedback。
+
+---
+
+### Decision: 审核通过前不强制检测是否点击过“在 SolidWorks 中打开”
+
+Status: Accepted
+
+Reason:
+
+用户可能已经通过其他方式在 SolidWorks 中完成检查，因此 SWPanel 不采用形式化限制。
+
+“在 SolidWorks 中打开”是推荐审核入口，而不是 Approved 的强制技术前置条件。
+
+---
+
 ### Decision: 模型审核通过后才允许报价
 
 Status: Accepted
