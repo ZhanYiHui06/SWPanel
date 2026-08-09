@@ -23,6 +23,7 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 ### 领域模型
 
 - [`docs/01-domain/business-objects.md`](docs/01-domain/business-objects.md) — Drawing、Revision、Memory、Modeling Run、Model、Review、Quote 等核心业务对象与不变量
+- [`docs/01-domain/lifecycle-and-status.md`](docs/01-domain/lifecycle-and-status.md) — Run、Clarification、Model、Review 与报价报告的生命周期、状态与执行阶段
 
 ### 决策记录
 
@@ -32,7 +33,6 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 
 随着讨论推进，将继续补充：
 
-- `docs/01-domain/lifecycle-and-status.md`
 - `docs/02-workflows/modeling-workflow.md`
 - `docs/02-workflows/review-workflow.md`
 - `docs/02-workflows/quotation-workflow.md`
