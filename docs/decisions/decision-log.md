@@ -49,7 +49,7 @@ Reason:
 
 自动建模存在迭代过程，需要保留失败记录、补充信息记录和不同结果。
 
-历史 Run 不允许覆盖，并通过明确序号进行区分。
+历史 Run 不允许被新的 Run 自动覆盖，并通过明确序号进行区分。
 
 ---
 
@@ -65,6 +65,23 @@ Reason:
 
 ---
 
+### Decision: Revision Memory 区分工程事实与建模反馈
+
+Status: Accepted
+
+Reason:
+
+用户补充的权威工程事实与人工审核指出的 Agent 建模错误具有不同语义，不能混为同一种信息。
+
+每个 Drawing Revision 的长期记忆至少逻辑区分：
+
+- Revision Facts：补充尺寸、结构解释、材料等可作为后续建模依据的版本级事实；
+- Modeling Feedback：审核中发现的 Agent 识别或建模错误，用于避免后续 Run 重复犯错。
+
+审核被退回时，审核意见进入 Modeling Feedback；真实产品信息发生变化时应创建新的 Drawing Revision。
+
+---
+
 ### Decision: 普通用户不直接输入 Prompt
 
 Status: Accepted
@@ -77,6 +94,42 @@ Reason:
 
 ---
 
+### Decision: Run 的业务状态与用户可见 Stage 分离
+
+Status: Accepted
+
+Reason:
+
+Agent 内部执行步骤可能持续变化，不应导致产品状态机不断膨胀。
+
+Run 使用少量业务状态表达生命周期，用户进度只展示 6 个 Stage：准备任务、分析图纸、规划模型、SolidWorks 建模、检查模型、生成结果。
+
+---
+
+### Decision: 用户可以主动取消 Run
+
+Status: Accepted
+
+Reason:
+
+用户可能发现上传错误、任务不再需要或希望停止耗时执行。
+
+取消后的 Run 保留为历史记录，重新建模必须创建新的 Run。
+
+---
+
+### Decision: Clarification 采用单轮批量提问
+
+Status: Accepted
+
+Reason:
+
+Skill 会在完成尽可能多的分析后，一次性汇总当前所有阻塞问题，而不是每遇到一个问题就中断一次。
+
+Clarification Request 可以包含多个问题；用户统一回答后更新 Revision Facts，原 Run 不继续，由用户手动创建新的 Run。
+
+---
+
 ### Decision: 图纸歧义必须人工确认
 
 Status: Accepted
@@ -85,7 +138,7 @@ Reason:
 
 工程尺寸和结构不能由 Agent 自由猜测。
 
-缺失、矛盾或多义信息出现时，当前 Run 停止并请求用户补充。用户回答后同步更新 Revision Memory，再创建新的 Run 从头执行。
+缺失、矛盾或多义信息出现时，当前 Run 终止为 Clarification Required。用户回答后同步更新 Revision Facts，再由用户主动创建新的 Run 从头执行。
 
 ---
 
@@ -101,13 +154,51 @@ Agent 成功生成模型不等于模型已经具备正式业务效力。
 
 ---
 
-### Decision: 模型审核失败后重新运行 Agent
+### Decision: 新 Approved Model 自动成为当前正式模型
 
 Status: Accepted
 
 Reason:
 
-MVP 不在被退回的原模型上进行增量自动修改。审核失败后保留原模型和审核记录，并创建新的 Modeling Run，从头生成新的候选模型。
+同一 Drawing Revision 下，新模型被人工 Approved 后，应自动替代旧模型的“当前正式模型”身份，不再额外询问。
+
+旧模型继续保留 `APPROVED` 的历史事实，但不再是 current approved model。
+
+---
+
+### Decision: 新 Drawing Revision 成为当前版本后，旧版本不再用于新报价
+
+Status: Accepted
+
+Reason:
+
+产品信息已通过新图纸版本发生变化时，旧版本虽然保留历史模型和报价，但不能继续作为当前业务依据。
+
+新 Revision 尚未产生 Approved Model 时，应等待新模型审核通过，而不是继续使用旧 Revision 的 Approved Model 生成新的报价报告。
+
+---
+
+### Decision: 被 Rejected 的 Model 不再恢复流转
+
+Status: Accepted
+
+Reason:
+
+一个模型被人工拒绝后，该模型的业务路线永久结束。
+
+如需修正，应创建新的 Modeling Run 并生成新的 Model，而不是修改旧 Model 后重新 Approved。
+
+---
+
+### Decision: 模型审核失败后由用户手动重新启动 Agent
+
+Status: Accepted
+
+Reason:
+
+审核失败本身只代表当前模型不可用，不应自动消耗 Agent 与 SolidWorks 资源。
+
+系统保存审核意见并更新 Modeling Feedback，用户自行决定何时重新点击自动建模并创建新的 Run。
 
 ---
 
@@ -119,19 +210,33 @@ Reason:
 
 自动生成模型不能直接作为报价依据，需要人工工程审核。
 
-报价必须建立在当前 Approved Model 基础上。
+报价必须建立在当前 Drawing Revision 的当前 Approved Model 基础上。
 
 ---
 
 ### Decision: 同一正式模型允许多次报价，并使用版本管理
 
+Status: Superseded
+
+Superseded by: 自动报价报告采用轻量版本管理
+
+Reason:
+
+早期方案计划使用完整 Quote / Quote Revision 生命周期。后续讨论确认自动报价报告仅作为内部参考材料，不需要复杂报价状态机，因此改为更轻量的报告序号与重生成方式。
+
+---
+
+### Decision: 自动报价报告采用轻量版本管理
+
 Status: Accepted
 
 Reason:
 
-材料价格或其他成本数据可能随时间变化，同一个 Approved Model 可能需要多次重新询价。
+自动报价报告主要供内部参考，不直接作为对客正式报价文件。
 
-历史报价不得覆盖，每次重新报价产生新的 Quote Revision。
+同一 Approved Model 可以多次生成报告，使用简单序号或时间戳区分即可；不引入 DRAFT / FINALIZED 等复杂状态。结果不合适时用户可以删除并重新生成。
+
+每份报告仍保存生成时使用的材料价格和成本数据快照。
 
 ---
 
@@ -141,9 +246,9 @@ Status: Accepted
 
 Reason:
 
-每次 Quote Revision 创建时读取当天有效的企业价格数据，并把参与本次计算的数据保存为不可变快照。
+每次自动报价报告创建时读取当天有效的企业价格数据，并把参与本次计算的数据保存为报告快照。
 
-后续全局价格更新不得自动修改历史报价结果。
+后续全局价格更新不得自动修改已经生成的历史报告。
 
 ---
 
@@ -166,3 +271,39 @@ Status: Accepted
 Reason:
 
 第一阶段固定成本不按不同产品类型拆分规则，而作为企业级全局报价配置参与计算。具体成本项和计算方法在报价工作流阶段继续定义。
+
+---
+
+### Decision: 核心业务对象提供显式删除能力
+
+Status: Accepted
+
+Reason:
+
+用户需要主动清理错误上传、无效版本、无意义 Run、模型与报价报告。
+
+新版本或新 Run 不得自动删除旧记录，但 Drawing、Drawing Revision、Run、Model、报价报告等主要对象应提供删除入口。删除不作为归档状态；删除恢复策略后续在 Engineering Spec 中确定。
+
+---
+
+### Decision: Drawing 与 Drawing Revision 不设计归档状态机
+
+Status: Accepted
+
+Reason:
+
+Drawing 是长期根对象，Revision 通过 `current_revision` 指针区分当前业务版本即可，不需要额外 ACTIVE / ARCHIVED 状态。
+
+旧版本保留历史，除非用户显式删除。
+
+---
+
+### Open Decision: 是否加入独立对客报价 PDF 模块
+
+Status: Open
+
+Context:
+
+自动报价报告只用于内部成本与报价参考。后续可以增加独立 `Customer Quotation` 页面，从内部报告预填数据，允许用户根据商务沟通修改最终价格、税费、运费、付款方式、有效期等信息并导出面向客户的 PDF。
+
+该能力是否进入首版 MVP 尚未最终确认。
