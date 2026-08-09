@@ -13,82 +13,180 @@ last_updated: 2026-08-09
 
 支持：
 
-- 上传工程图
-- 长期保存图纸
-- 查看图纸历史
-- 查看关联建模任务
-- 查看关联模型
-- 查看关联报价
+- 上传工程图；
+- 长期保存 Drawing；
+- 同一 Drawing 通过 Revision 管理不同图纸版本；
+- 使用 `current_revision` 表达当前业务版本；
+- 查看历史 Revision；
+- 查看关联建模任务、模型、审核结果和报价报告；
+- 删除 Drawing 或指定 Drawing Revision。
 
-图纸是系统中的长期业务对象。
+Drawing 是系统中的长期根业务对象，真正参与建模的是确定的 Drawing Revision。
 
-## 2. 自动建模任务
+## 2. Revision Memory
 
-支持：
-
-- 用户主动选择图纸启动建模
-- 创建独立 Modeling Run
-- 查看任务进度
-- 保存历史执行记录
-- 多次重复执行 Agent
-
-重复执行必须保留历史，不覆盖旧结果。
-
-## 3. Agent 建模管理
-
-系统负责：
-
-- 任务编排
-- 状态展示
-- 异常管理
-- 结果归档
-
-SolidWorks 建模能力由外部 skill 执行。
-
-## 4. 人工审核
+每个 Drawing Revision 拥有独立长期 Memory。
 
 支持：
 
-- 查看模型预览
-- 查看建模报告
-- 查看验证结果
-- 在 SolidWorks 中打开模型
-- 审核通过或退回
+- 保存用户补充的工程事实；
+- 保存 Clarification 回答；
+- 保存模型审核中的 Agent 错误反馈；
+- 在该 Revision 的后续 Modeling Run 中持续使用最新 Memory。
 
-模型未审核通过前，不进入报价流程。
+Memory 逻辑上区分：
 
-## 5. 自动报价
+- `Revision Facts`：尺寸、材料、结构解释等可作为建模依据的权威事实；
+- `Modeling Feedback`：审核指出的 Agent 识别和建模错误。
+
+新 Drawing Revision 默认创建独立 Memory，不自动继承旧版本信息。
+
+## 3. 自动建模任务
 
 支持：
 
-- 读取审核通过模型参数
-- 获取零件体积
-- 计算原料需求
-- 根据企业维护的数据计算材料成本
-- 添加固定成本
-- 生成报价报告
+- 用户主动选择当前 Drawing Revision 启动建模；
+- 创建独立 Modeling Run；
+- 单机串行任务队列；
+- 查看用户可见的 6 级执行 Stage：准备任务、分析图纸、规划模型、SolidWorks 建模、检查模型、生成结果；
+- 查看任务业务状态；
+- 用户主动取消排队中或运行中的 Run；
+- 保存历史执行记录；
+- 对同一 Revision 多次重复执行 Agent；
+- 删除指定 Modeling Run。
 
-第一阶段不直接发送客户报价。
+每个 Run 永远绑定创建时确定的 Drawing Revision；新 Run 不自动覆盖旧 Run。
+
+## 4. Clarification 补充信息
+
+当 Agent 无法依据权威信息确定一个或多个工程事实时：
+
+- Agent 继续完成仍可进行的分析；
+- 尽可能一次性汇总本轮所有阻塞问题；
+- 当前 Run 终止为 `CLARIFICATION_REQUIRED`；
+- 用户在 Run 详情页通过结构化表单统一补充信息；
+- 回答同步写入该 Revision 的 Revision Facts；
+- 原 Run 不恢复；
+- 用户手动决定何时重新启动新的 Modeling Run。
+
+Drawing Revision 页面同时提供长期的“版本记忆 / 补充信息”查看与维护入口。
+
+## 5. Agent 建模管理
+
+系统产品层负责：
+
+- 输入与版本管理；
+- Run 创建与任务编排；
+- 状态和 Stage 展示；
+- Clarification 交互；
+- 异常管理；
+- 结果与 Artifact 归档。
+
+SolidWorks 自动建模能力由既有 Skill 作为核心执行引擎提供。
+
+普通用户不直接接触 Prompt；Agent 对话和细粒度日志仅作为调试或高级信息存在。
+
+## 6. 模型与人工审核
+
+支持：
+
+- 查看模型预览图；
+- 查看建模报告；
+- 查看验证结果；
+- 下载 / 打开 SolidWorks 模型；
+- 在 SolidWorks 中进行真实工程审核；
+- 在 SWPanel 中执行 Approved 或 Rejected；
+- 保存独立 Model Review 记录；
+- Rejected 时保存审核意见并写入 Modeling Feedback；
+- 删除指定 Model。
+
+一个 Drawing Revision 可以拥有多个历史 Approved Model，但同时只有一个 `current_approved_model`。
+
+新的 Model 被 Approved 后自动成为该 Revision 的当前正式模型。
+
+Rejected Model 永久停止业务流转，不在原 Model 上修改后重新 Approved。
+
+审核失败后系统不自动启动新的 Run，由用户手动决定何时重新建模。
+
+## 7. 自动报价报告
+
+只有当前 Drawing Revision 的当前 Approved Model 才允许生成新的内部报价报告。
+
+支持：
+
+- 读取正式模型的零件参数；
+- 获取成品真实体积；
+- 计算加工所需原料体积；
+- 根据材料密度和企业维护价格计算材料成本；
+- 加入企业全局固定成本；
+- 生成内部 Quote Report；
+- 保存报告生成当日使用的价格和成本数据快照；
+- 同一模型多次生成报告，以简单编号或时间戳区分；
+- 删除报价报告并重新生成。
+
+Quote Report 是内部参考材料，不直接等于最终对客报价，因此第一阶段不设计复杂的 DRAFT / APPROVED / FINALIZED 状态机。
+
+## 8. 企业成本数据
+
+第一阶段支持：
+
+- 用户手动维护材料价格；
+- 用户维护与材料成本计算相关的基础数据；
+- 全局固定成本配置；
+- 报价报告生成时读取当日有效数据。
+
+暂不自动获取外部材料行情。
+
+## 9. 删除能力
+
+MVP 的主要业务对象提供显式删除入口，包括：
+
+- Drawing；
+- Drawing Revision；
+- Modeling Run；
+- Model；
+- Quote Report。
+
+删除父对象时必须向用户说明关联数据影响范围。
+
+删除是用户主动行为，不额外设计“归档”状态。底层采用软删除、回收站或硬删除由 Engineering Spec 决定。
+
+# 待定扩展
+
+## Customer Quotation
+
+未来可单独增加面向客户的正式报价单功能：
+
+- 从内部 Quote Report 预填零件和参考报价信息；
+- 用户人工调整最终报价；
+- 填写税费、运费、付款方式、交期、报价有效期、客户信息和商务条款；
+- 输出正式客户报价 PDF。
+
+该能力与内部 Quote Report 分离，且不得反向修改内部成本报告。
+
+是否纳入首版 MVP 尚未最终确认。
 
 # 明确不做
 
 第一阶段不包含：
 
-- 外部客户账号
-- 客户门户
-- CRM
-- ERP
-- 生产排程
-- CAM/CNC 自动生成
-- Web 端 CAD 编辑器
-- 多租户 SaaS
-- 多机器并行建模
-- 手绘图纸识别
-- 材料市场价格自动同步
-- 复杂企业权限体系
+- 外部客户账号；
+- 客户门户；
+- CRM；
+- ERP；
+- 生产排程；
+- CAM / CNC 自动生成；
+- Web 端 CAD 编辑器；
+- 多租户 SaaS；
+- 多机器并行建模；
+- 手绘图纸识别；
+- 材料市场价格自动同步；
+- 复杂企业权限体系；
+- 将 Agent 聊天作为核心产品 UI；
+- 将旧 Drawing Revision 继续用于当前版本的新报价。
 
 ## 部署边界
 
-第一阶段运行于企业本地电脑环境。
+第一阶段运行于企业本地 Windows 电脑环境，由本地 SolidWorks 执行自动建模。
 
-不依赖云端部署作为核心能力。
+不依赖云端部署作为核心能力；模型 API 可使用具有明确隐私保护条款的云服务商。
