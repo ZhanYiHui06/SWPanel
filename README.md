@@ -31,6 +31,12 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 - [`docs/02-workflows/review-workflow.md`](docs/02-workflows/review-workflow.md) — 从 `PENDING_REVIEW` 到 `APPROVED / REJECTED` 的轻量人工模型审核流程
 - [`docs/02-workflows/quotation-workflow.md`](docs/02-workflows/quotation-workflow.md) — 从当前 Approved Model 到内部成本测算报告的参数确认、确定性计算与报告生成流程
 
+### 产品设计上下文
+
+- [`docs/03-product/information-architecture.md`](docs/03-product/information-architecture.md) — 顶级导航、Drawing Workspace、页面层级、页面职责与明确不建立的模块
+- [`docs/03-product/screen-priority.md`](docs/03-product/screen-priority.md) — Design Mode 页面优先级、第一批 / 第二批设计顺序与共享组件建议
+- [`docs/03-product/ui-content-fixtures.md`](docs/03-product/ui-content-fixtures.md) — 统一的图纸、Run、Model、Clarification、成本和设置示例数据，供原型与前端占位使用
+
 ### 决策记录
 
 - [`docs/decisions/decision-log.md`](docs/decisions/decision-log.md) — 重要产品决策及其原因
@@ -40,7 +46,6 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 随着讨论推进，将继续补充：
 
 - `docs/02-workflows/drawing-workflow.md`
-- `docs/03-product/`
 - `docs/04-agent/`
 - `docs/05-engineering/`
 - `docs/06-evaluation/`
