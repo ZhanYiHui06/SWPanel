@@ -1,6 +1,6 @@
 # SWPanel
 
-江海冶金内部图纸自动建模与报价工作台的产品与工程知识库。
+江海冶金内部图纸自动建模与成本测算工作台的产品与工程知识库。
 
 本仓库用于持续沉淀产品定义、业务对象、工作流、Agent 边界、工程 Spec 与验收标准。聊天讨论用于探索，仓库文档用于记录已经确认或正在演进的事实。
 
@@ -23,12 +23,13 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 ### 领域模型
 
 - [`docs/01-domain/business-objects.md`](docs/01-domain/business-objects.md) — Drawing、Revision、Memory、Modeling Run、Model、Review、Quote Report 等核心业务对象与不变量
-- [`docs/01-domain/lifecycle-and-status.md`](docs/01-domain/lifecycle-and-status.md) — Run、Clarification、Model、Review 与报价报告的生命周期、状态与执行阶段
+- [`docs/01-domain/lifecycle-and-status.md`](docs/01-domain/lifecycle-and-status.md) — Run、Clarification、Model、Review 与内部报告的生命周期、状态与执行阶段
 
 ### 工作流
 
 - [`docs/02-workflows/modeling-workflow.md`](docs/02-workflows/modeling-workflow.md) — 从用户发起 Run 到生成 `PENDING_REVIEW` Model 的完整自动建模工作流
 - [`docs/02-workflows/review-workflow.md`](docs/02-workflows/review-workflow.md) — 从 `PENDING_REVIEW` 到 `APPROVED / REJECTED` 的轻量人工模型审核流程
+- [`docs/02-workflows/quotation-workflow.md`](docs/02-workflows/quotation-workflow.md) — 从当前 Approved Model 到内部成本测算报告的参数确认、确定性计算与报告生成流程
 
 ### 决策记录
 
@@ -39,10 +40,11 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 随着讨论推进，将继续补充：
 
 - `docs/02-workflows/drawing-workflow.md`
-- `docs/02-workflows/quotation-workflow.md`
 - `docs/03-product/`
 - `docs/04-agent/`
 - `docs/05-engineering/`
 - `docs/06-evaluation/`
+
+后续还将独立设计 `Customer Quotation` 模块，用于从内部成本测算结果出发形成人工确认的最终对客报价与 PDF。
 
 > 注意：当前仓库为公开仓库。真实客户图纸、企业采购价格、成本数据、API 密钥及其他商业敏感信息不得提交到公开仓库。
