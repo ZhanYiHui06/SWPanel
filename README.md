@@ -28,6 +28,7 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 ### 工作流
 
 - [`docs/02-workflows/modeling-workflow.md`](docs/02-workflows/modeling-workflow.md) — 从用户发起 Run 到生成 `PENDING_REVIEW` Model 的完整自动建模工作流
+- [`docs/02-workflows/review-workflow.md`](docs/02-workflows/review-workflow.md) — 从 `PENDING_REVIEW` 到 `APPROVED / REJECTED` 的轻量人工模型审核流程
 
 ### 决策记录
 
@@ -38,7 +39,6 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 随着讨论推进，将继续补充：
 
 - `docs/02-workflows/drawing-workflow.md`
-- `docs/02-workflows/review-workflow.md`
 - `docs/02-workflows/quotation-workflow.md`
 - `docs/03-product/`
 - `docs/04-agent/`
