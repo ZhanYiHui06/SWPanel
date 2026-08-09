@@ -20,6 +20,10 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 - [`docs/00-product/product-brief.md`](docs/00-product/product-brief.md) — 产品目标、用户、核心闭环与 MVP 定义
 - [`docs/00-product/product-scope.md`](docs/00-product/product-scope.md) — 第一阶段功能边界与明确不做的事项
 
+### 领域模型
+
+- [`docs/01-domain/business-objects.md`](docs/01-domain/business-objects.md) — Drawing、Revision、Memory、Modeling Run、Model、Review、Quote 等核心业务对象与不变量
+
 ### 决策记录
 
 - [`docs/decisions/decision-log.md`](docs/decisions/decision-log.md) — 重要产品决策及其原因
@@ -28,7 +32,6 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 
 随着讨论推进，将继续补充：
 
-- `docs/01-domain/business-objects.md`
 - `docs/01-domain/lifecycle-and-status.md`
 - `docs/02-workflows/modeling-workflow.md`
 - `docs/02-workflows/review-workflow.md`
