@@ -37,6 +37,10 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 - [`docs/03-product/screen-priority.md`](docs/03-product/screen-priority.md) — Design Mode 页面优先级、第一批 / 第二批设计顺序与共享组件建议
 - [`docs/03-product/ui-content-fixtures.md`](docs/03-product/ui-content-fixtures.md) — 统一的图纸、Run、Model、Clarification、成本和设置示例数据，供原型与前端占位使用
 
+### 工程计划
+
+- [`docs/05-engineering/development-plan.md`](docs/05-engineering/development-plan.md) — 从 TRAE Design 原型到本地 Windows MVP 的阶段开发路线图、工程边界、Exit Gate 与 Definition of Done
+
 ### 决策记录
 
 - [`docs/decisions/decision-log.md`](docs/decisions/decision-log.md) — 重要产品决策及其原因
@@ -47,7 +51,8 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 
 - `docs/02-workflows/drawing-workflow.md`
 - `docs/04-agent/`
-- `docs/05-engineering/`
+- `docs/05-engineering/architecture.md`
+- `docs/05-engineering/implementation-status.md`
 - `docs/06-evaluation/`
 
 后续还将独立设计 `Customer Quotation` 模块，用于从内部成本测算结果出发形成人工确认的最终对客报价与 PDF。
