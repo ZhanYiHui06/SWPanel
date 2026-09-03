@@ -1,0 +1,277 @@
+{
+  "schema_version": "1.0",
+  "verified_versions": {
+    "solidworks": ["2024", "2026"],
+    "autocad": ["2024"]
+  },
+  "capabilities": [
+    {
+      "id": "requirements_planning",
+      "label": "需求分析与工程规划",
+      "level": "verified",
+      "backends": ["local-agent"],
+      "verified_versions": [],
+      "dependencies": ["python"],
+      "limitations": ["关键尺寸、公差、载荷和安全参数仍需人工确认"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "part_and_features",
+      "label": "参数化零件与基础特征",
+      "level": "verified",
+      "backends": ["solidworks-com"],
+      "verified_versions": ["2024", "2026"],
+      "dependencies": ["SolidWorks", "pywin32", "comtypes"],
+      "limitations": ["复杂曲面、模具和高级拓扑引用不属于无人值守能力"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "holes_and_finishing",
+      "label": "孔槽、螺纹、圆角与倒角",
+      "level": "verified",
+      "backends": ["solidworks-com"],
+      "verified_versions": ["2024"],
+      "dependencies": ["SolidWorks", "pywin32", "comtypes"],
+      "limitations": ["每个孔槽必须有规格、数量和定位证据"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "parameter_updates",
+      "label": "命名尺寸参数修改",
+      "level": "pilot",
+      "backends": ["solidworks-com"],
+      "verified_versions": ["2024", "2026"],
+      "dependencies": ["SolidWorks", "pywin32"],
+      "limitations": ["必须提供准确尺寸名；配置族批量修改仍需人工复核"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "custom_properties_and_bom",
+      "label": "自定义属性与装配 BOM CSV",
+      "level": "pilot",
+      "backends": ["solidworks-com", "local-filesystem"],
+      "verified_versions": ["2024", "2026"],
+      "dependencies": ["SolidWorks", "pywin32"],
+      "limitations": ["CSV 必须与 SolidWorks 原生 BOM、配置和工程图人工核对"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "pack_and_go",
+      "label": "SolidWorks 原生 Pack and Go",
+      "level": "pilot",
+      "backends": ["solidworks-com", "solidworks-native+staged_dependencies", "local-filesystem"],
+      "verified_versions": ["2024", "2026"],
+      "dependencies": ["SolidWorks", "pywin32", "comtypes"],
+      "limitations": ["SW2026 SP01.1 的基础两零件装配已连续三次通过原生 Pack and Go 回归；其他版本或复杂引用若实际落盘缺少依赖，默认生成基于 GetDependencies2 的 pilot 暂存包，严格原生调用可设置 fallback_policy=blocked；外部引用、Toolbox、配置和工程图必须人工抽查"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "assembly_and_mates",
+      "label": "装配体与配合",
+      "level": "verified",
+      "backends": ["solidworks-com"],
+      "verified_versions": ["2024"],
+      "dependencies": ["SolidWorks", "pywin32", "comtypes"],
+      "limitations": ["必须回读配合特征和自由度；不等于完整干涉或受力分析"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "motion_study",
+      "label": "旋转马达 Motion Study",
+      "level": "pilot",
+      "backends": ["solidworks-com"],
+      "verified_versions": ["2024"],
+      "dependencies": ["SolidWorks Motion Study 加载项"],
+      "limitations": ["当前只验证旋转马达和结果审计，不承诺接触、阻尼、受力和完整 FEA"],
+      "allowed_modes": ["reviewed"]
+    },
+    {
+      "id": "drawing_dimension_insertion",
+      "label": "SolidWorks 工程图模型尺寸自动插入",
+      "level": "verified",
+      "backends": ["solidworks-com"],
+      "verified_versions": ["2024", "2026"],
+      "dependencies": ["SolidWorks", "pywin32"],
+      "limitations": ["仅导入模型中已存在且标记为工程图的 DisplayDimension；模型缺少尺寸时先自动标注草图或补齐参数尺寸；仍需人工检查位置、重叠和尺寸链完整性"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "drawings_and_bom",
+      "label": "工程图、尺寸链与 BOM",
+      "level": "pilot",
+      "backends": ["solidworks-com", "autocad-com"],
+      "verified_versions": ["2024", "2026"],
+      "dependencies": ["SolidWorks 或 AutoCAD"],
+      "limitations": ["SW2026 已验证三视图、6 个真实尺寸实体、PDF 和非空 BMP；IAnnotation 不提供尺寸文字原生包围盒，只能用锚点/字体保守估算并人工目视复核", "图框、标题栏、尺寸链、孔表和 GB/T 风格必须人工目视复核"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "export_delivery",
+      "label": "文件导出与交付包",
+      "level": "verified",
+      "backends": ["solidworks-com", "autocad-com", "headless-open-format", "local-filesystem"],
+      "verified_versions": ["2024", "2026"],
+      "dependencies": ["目标 CAD 软件或对应无头转换器"],
+      "limitations": ["专有格式仍需目标 CAD 原生打开复核"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "headless_open_format_writing",
+      "label": "无 CAD 开放格式写入",
+      "level": "pilot",
+      "backends": ["headless-occt", "headless-open-format", "local-python", "ezdxf"],
+      "verified_versions": ["OCP 7.9.3.1.1"],
+      "dependencies": ["python", "cadquery-ocp", "trimesh", "ezdxf"],
+      "limitations": [
+        "当前真实写入 .cadstudio.json、STEP、IGES、BREP、STL、OBJ、GLB、DXF、SVG、PDF、PNG，并生成几何与 SHA-256 证据",
+        "OCCT 当前覆盖盒体、圆柱、布尔合并、圆柱孔切除和独立入口的受限封闭直纹 Loft；其余复杂特征仍返回 blocked",
+        "不会伪造 SLDPRT、SLDASM、SLDDRW 或 DWG；FEA、安全认证和制造性结论不由几何写入器提供"
+      ],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "geometry_and_delivery_review",
+      "label": "几何、文件与交付复核",
+      "level": "verified",
+      "backends": ["local-python"],
+      "verified_versions": [],
+      "dependencies": ["python"],
+      "limitations": ["文件级检查不能替代工程师对关键尺寸和制造性的判断"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "dfm_checks",
+      "label": "机加工、钣金、激光切割与 3D 打印 DFM 复核",
+      "level": "pilot",
+      "backends": ["local-python"],
+      "verified_versions": [],
+      "dependencies": ["python"],
+      "limitations": [
+        "支持供应商 DFM Profile 能力交集、单位归一和 SolidWorks/OCCT B-Rep 证据绑定；缺失或伪造关键证据会返回 blocked",
+        "机器规则全部通过仍必须人工确认材料、公差、载荷、装配、刀具/模具、打印方向和供应商能力",
+        "DFM 报告是风险复核，不是制造认证；缺少材料、壁厚、K 因子、割缝或成型空间等关键输入时返回 blocked"
+      ],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "autocad_basic_drafting",
+      "label": "AutoCAD 二维绘图与批量改图",
+      "level": "not_implemented",
+      "backends": ["autocad-com"],
+      "verified_versions": [],
+      "dependencies": ["AutoCAD", "pywin32"],
+      "limitations": ["AutoCAD 2024 ActiveX 当前真机回归被阻塞：Documents、Layers、SelectionSets 代理不稳定；不得宣称原生 DWG 绘图已完成", "可用范围仅限人工交互排障；DXF 无头预览和结构审查见 autocad_headless_preview"],
+      "allowed_modes": ["interactive"]
+    },
+    {
+      "id": "configurations_and_design_tables",
+      "label": "配置与设计表",
+      "level": "reference_only",
+      "backends": ["solidworks-com"],
+      "verified_versions": [],
+      "dependencies": ["SolidWorks", "Excel"],
+      "limitations": ["尚无连续真实回归样件，不允许无人值守交付"],
+      "allowed_modes": ["interactive"]
+    },
+    {
+      "id": "sheet_metal",
+      "label": "钣金建模与展开",
+      "level": "reference_only",
+      "backends": ["solidworks-com"],
+      "verified_versions": [],
+      "dependencies": ["SolidWorks"],
+      "limitations": ["尚无稳定执行器和版本矩阵，不允许宣称已完成"],
+      "allowed_modes": ["interactive"]
+    },
+    {
+      "id": "weldments",
+      "label": "焊件与切割清单",
+      "level": "reference_only",
+      "backends": ["solidworks-com"],
+      "verified_versions": [],
+      "dependencies": ["SolidWorks"],
+      "limitations": ["尚无稳定执行器和真实回归样件"],
+      "allowed_modes": ["interactive"]
+    },
+    {
+      "id": "surface_modeling",
+      "label": "复杂曲面与连续性检查",
+      "level": "pilot",
+      "backends": ["local-python", "headless-occt", "solidworks-com"],
+      "verified_versions": [],
+      "dependencies": ["python", "可选 OCP", "可选 SolidWorks"],
+      "limitations": ["headless-occt 已真实生成并重开受限封闭直纹/平滑 Loft、直线/单圆弧 Sweep、闭壳 Knit 和开放面 Thicken；操作均要求版本化 B-Rep 证据", "G1/G2 只对拓扑共享边五点采样，平滑变截面可能因包络鼓包被阻断；Thicken 使用局部曲率九点采样和 50% 半径保守门禁，仍不证明全局无自交、Class-A、模具质量或可制造性"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "mold_tools",
+      "label": "模具工具与分型检查",
+      "level": "pilot",
+      "backends": ["local-python", "headless-occt", "solidworks-com"],
+      "verified_versions": [],
+      "dependencies": ["python", "可选 OCP", "可选 SolidWorks 模具工具与许可证"],
+      "limitations": ["当前只校验拔模方向、分型边/面、型芯型腔引用和收缩率计划；不生成型芯型腔实体，不替代模具设计"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "simulation_and_fea",
+      "label": "仿真与 FEA",
+      "level": "pilot",
+      "backends": ["local-python", "calculix", "elmer", "solidworks-simulation-adapter"],
+      "verified_versions": ["CalculiX 2.23"],
+      "dependencies": ["python", "可选 CalculiX ccx", "可选 ElmerSolver", "可选 SolidWorks Simulation 许可证"],
+      "limitations": ["已真实运行 C3D4/C3D8 线性静力、NLGEOM 几何非线性、受限塑性曲线和双实体面接触样件；可解析最终步 COPEN/CPRESS/CSLIP 并保留 .cel 接触迭代证据，求解结果仍统一为 review_required", "网格收敛序列支持线性/非线性静力，比较末两档位移、应力及存在时的塑性应变、接触穿透和接触压力；本机线性五档悬臂梁通过 8% 阈值，未达标时仍返回 fea_mesh_convergence_not_reached", "尚未覆盖大型装配接触、全过程穿透允许值自动认证、屈曲、模态、热耦合和工程认证；FEA 结果不等于安全认证"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "autocad_headless_preview",
+      "label": "AutoCAD 无头 DXF 预览与检查",
+      "level": "pilot",
+      "backends": ["ezdxf"],
+      "verified_versions": [],
+      "dependencies": ["可选 ezdxf"],
+      "limitations": ["只读 DXF；可生成受实体和文件大小限制的 PreviewScene JSON 与 PNG；不能读取或写入 DWG，不能替代 AutoCAD 原生 DWG/PDF 复核"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "dxf_preview_scene",
+      "label": "DXF 安全 PreviewScene 转换",
+      "level": "pilot",
+      "backends": ["ezdxf", "local-python"],
+      "verified_versions": [],
+      "dependencies": ["python", "ezdxf"],
+      "limitations": ["只读白名单实体；输入上限 50 MB/200000 实体；不支持实体只记录 warnings；输出不得覆盖旧场景文件"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "autocad_script_backend",
+      "label": "AutoCAD SCR/AutoLISP 白名单命令桥",
+      "level": "pilot",
+      "backends": ["autocad-script"],
+      "verified_versions": ["2024"],
+      "dependencies": ["AutoCAD"],
+      "limitations": ["命令执行可能异步；只允许白名单脚本，保存后必须复核 DWG/DXF/PDF 产物"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "autocad_dotnet_backend",
+      "label": "AutoCAD .NET Managed API 桥接",
+      "level": "pilot",
+      "backends": ["autocad-dotnet"],
+      "verified_versions": ["2024"],
+      "dependencies": [".NET SDK 8", ".NET Framework 4.8 引用程序集", "AutoCAD 2024 Managed API DLL"],
+      "limitations": ["AutoCAD 2024 已连续通过白名单命令、真实 DWG 保存重开、PDF/PNG 和实体/图层/尺寸回归，但仍需持续回归和人工复核，暂不允许无人值守交付", "运行时逐次复验证据并在损坏时降级；不暴露任意 AutoLISP、SCR 或 .NET 代码执行", "桌面部署仍需受信任路径或签名插件包；AutoCAD 2025–2026 尚未完成该 .NET 插件真机回归"],
+      "allowed_modes": ["interactive", "reviewed"]
+    },
+    {
+      "id": "routing",
+      "label": "Routing",
+      "level": "pilot",
+      "backends": ["local-python", "solidworks-routing-preflight"],
+      "verified_versions": [],
+      "dependencies": ["python", "可选 SolidWorks Routing 类型库和加载项许可证"],
+      "limitations": ["当前支持中性 Routing 端点、分段、长度、弯曲半径、碰撞/间隙、支撑间距和 BOM 复核；不生成 SOLIDWORKS Routing 原生特征", "本机 SW2026 可发现 SWRoutingLib.tlb 和核心接口，但未检测到 Routing AddIn 注册或许可证证据时原生写入必须 blocked"],
+      "allowed_modes": ["interactive", "reviewed"]
+    }
+  ]
+}

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>设置 — SWPanel</title>
+  <link rel="stylesheet" href="../css/globals.css?v=20260810b">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- ═══════════════════════════════════════════════════════
+         Sidebar (identical across all pages)
+         ═══════════════════════════════════════════════════════ -->
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-mark">S</div>
+        <div>
+          <div class="sidebar-brand-name">SWPanel</div>
+          <div class="sidebar-brand-sub">JANGHI</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="../index.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 6.5L8 2l6 4.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6.5z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6 14V8h4v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          工作台
+        </a>
+        <a href="drawings.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 2.5h7l3 3V13.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M10 2.5v3h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5 8h6M5 10.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          图纸库
+        </a>
+        <a href="runs.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+          建模任务
+        </a>
+        <a href="cost-data.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 1v14M3.5 5h9M4.5 8h7M5.5 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          成本数据
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="settings.html" class="sidebar-item active">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="8" cy="8" r="2.25" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8 2.5a5.5 5.5 0 0 0-4.8 2.85M2.8 9.15A5.5 5.5 0 0 0 8 13.5M13.2 9.15A5.5 5.5 0 0 0 8 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          设置
+        </a>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Main Content
+         ═══════════════════════════════════════════════════════ -->
+    <main class="app-main">
+
+      <!-- Topbar -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <h1 class="page-title">设置</h1>
+        </div>
+        <div class="topbar-right">
+          <button class="icon-button" title="通知">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2a4 4 0 0 0-4 4v2.5L2.5 10.5h11L12 8.5V6a4 4 0 0 0-4-4zM6.5 12.5a1.5 1.5 0 0 0 3 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Page Body -->
+      <div class="page-content">
+
+        <!-- Page header -->
+        <div class="section section-tight">
+          <h1 class="page-header-title">设置</h1>
+          <p class="text-muted text-sm">SolidWorks、文件存储、Agent API 与高级配置</p>
+        </div>
+
+        <!-- Settings Group: SolidWorks -->
+        <div class="settings-group">
+          <div class="settings-group-header">
+            <span class="settings-group-title">SolidWorks</span>
+            <span class="status-badge completed">已连接</span>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="settings-row-name">程序路径</div>
+              <div class="settings-row-desc">SolidWorks 可执行文件位置</div>
+            </div>
+            <div class="settings-row-value">
+              <input type="text" class="form-input mono" value="C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\SLDWORKS.exe" readonly>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="settings-row-name">版本</div>
+              <div class="settings-row-desc">检测到的 SolidWorks 版本</div>
+            </div>
+            <div class="settings-row-value">
+              <span class="text-mono text-sm">SolidWorks 2022</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="settings-row-name">连接状态</div>
+              <div class="settings-row-desc">SWPanel 与 SolidWorks 的连接情况</div>
+            </div>
+            <div class="settings-row-value">
+              <span class="status-badge completed">已连接</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="settings-row-name">检测</div>
+              <div class="settings-row-desc">重新检测 SolidWorks 安装</div>
+            </div>
+            <div class="settings-row-value">
+              <button class="btn btn-secondary btn-sm">重新检测</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings Group: 文件存储 -->
+        <div class="settings-group">
+          <div class="settings-group-header">
+            <span class="settings-group-title">文件存储</span>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="settings-row-name">数据目录</div>
+              <div class="settings-row-desc">图纸、模型、报告等数据的存储位置</div>
+            </div>
+            <div class="settings-row-value">
+              <input type="text" class="form-input mono" value="C:\SWPanel\Data" readonly>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="settings-row-name">Workspace 路径</div>
+              <div class="settings-row-desc">Agent 建模工作目录</div>
+            </div>
+            <div class="settings-row-value">
+              <input type="text" class="form-input mono" value="C:\SWPanel\Workspace" readonly>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings Group: Agent / API -->
+        <div class="settings-group">
+          <div class="settings-group-header">
+            <span class="settings-group-title">Agent / API</span>
+            <span class="status-badge completed">已连接</span>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="settings-row-name">Base URL</div>
+              <div class="settings-row-desc">Agent API 服务地址</div>
+            </div>
+            <div class="settings-row-value">
+              <input type="text" class="form-input mono" value="https://api.example.com/v1">
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="settings-row-name">API Key</div>
+              <div class="settings-row-desc">用于身份验证的密钥</div>
+            </div>
+            <div class="settings-row-value">
+              <input type="password" class="form-input mono" value="••••••••••••••••">
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="settings-row-name">Model</div>
+              <div class="settings-row-desc">Agent 使用的模型配置</div>
+            </div>
+            <div class="settings-row-value">
+              <span class="text-mono text-sm">Configured Model</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <div class="settings-row-name">连接状态</div>
+              <div class="settings-row-desc">与 Agent API 的连接情况</div>
+            </div>
+            <div class="settings-row-value">
+              <span class="status-badge completed">已连接</span>
+              <button class="btn btn-secondary btn-sm" style="margin-left:12px;">测试连接</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings Group: 高级设置 (collapsed by default) -->
+        <div class="settings-group">
+          <button class="settings-collapsible-trigger" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
+            <span class="settings-group-title">高级设置</span>
+            <svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="settings-collapsible-content">
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <div class="settings-row-name">Prompt Template</div>
+                <div class="settings-row-desc">Agent 建模提示词模板</div>
+              </div>
+              <div class="settings-row-value">
+                <button class="btn btn-ghost btn-sm btn-ghost-muted">查看</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <div class="settings-row-name">Skill</div>
+                <div class="settings-row-desc">Agent 技能配置</div>
+              </div>
+              <div class="settings-row-value">
+                <button class="btn btn-ghost btn-sm btn-ghost-muted">查看</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <div class="settings-row-name">Runtime</div>
+                <div class="settings-row-desc">运行时环境配置</div>
+              </div>
+              <div class="settings-row-value">
+                <button class="btn btn-ghost btn-sm btn-ghost-muted">查看</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <div class="settings-row-name">Log</div>
+                <div class="settings-row-desc">系统日志</div>
+              </div>
+              <div class="settings-row-value">
+                <button class="btn btn-ghost btn-sm btn-ghost-muted">查看</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <div class="settings-row-name">Debug</div>
+                <div class="settings-row-desc">调试工具</div>
+              </div>
+              <div class="settings-row-value">
+                <button class="btn btn-ghost btn-sm btn-ghost-muted">查看</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom notice -->
+        <div class="inline-notice neutral mt-6">
+          <svg class="inline-notice-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 7v4M8 5v.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          <div class="inline-notice-content">
+            <div class="inline-notice-text">高级设置仅供技术人员使用，普通用户通常不需要修改。</div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

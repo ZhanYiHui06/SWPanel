@@ -1,0 +1,31 @@
+{
+  "name": "SWPanel",
+  "description": "江海冶金二维工程图自动建模、SolidWorks 模型审核与成本测算工作台",
+  "designLibrary": "Vercel",
+  "pages": [
+    { "id": "workbench", "name": "工作台", "path": "index.html", "entry": true },
+    { "id": "drawings", "name": "图纸库", "path": "pages/drawings.html" },
+    { "id": "drawing-overview", "name": "Drawing Workspace · 概览", "path": "pages/drawing-overview.html" },
+    { "id": "drawing-runs", "name": "Drawing Workspace · 建模记录", "path": "pages/drawing-runs.html" },
+    { "id": "drawing-models", "name": "Drawing Workspace · 模型", "path": "pages/drawing-models.html" },
+    { "id": "model-detail", "name": "Model Detail", "path": "pages/model-detail.html" },
+    { "id": "runs", "name": "建模任务", "path": "pages/runs.html" },
+    { "id": "run-detail", "name": "Run Detail · Clarification", "path": "pages/run-detail.html" },
+    { "id": "drawing-memory", "name": "Drawing Workspace · 版本记忆", "path": "pages/drawing-memory.html" },
+    { "id": "drawing-costs", "name": "Drawing Workspace · 成本测算", "path": "pages/drawing-costs.html" },
+    { "id": "cost-params", "name": "成本测算参数确认", "path": "pages/cost-params.html" },
+    { "id": "cost-report", "name": "成本测算报告详情", "path": "pages/cost-report.html" },
+    { "id": "cost-data", "name": "成本数据", "path": "pages/cost-data.html" },
+    { "id": "settings", "name": "设置", "path": "pages/settings.html" },
+    { "id": "component-spec", "name": "组件规范", "path": "pages/component-spec.html" }
+  ],
+  "tokens": "css/globals.css",
+  "mode": "light",
+  "primaryNavigation": [
+    { "label": "工作台", "href": "index.html" },
+    { "label": "图纸库", "href": "pages/drawings.html" },
+    { "label": "建模任务", "href": "pages/runs.html" },
+    { "label": "成本数据", "href": "pages/cost-data.html" },
+    { "label": "设置", "href": "pages/settings.html", "footer": true }
+  ]
+}

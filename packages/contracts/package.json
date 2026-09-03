@@ -1,0 +1,30 @@
+{
+  "name": "@swpanel/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SWPanel serialized repository, query, command, event and IPC contracts shared by the UI and the Agent Runner, including the canonical newline-delimited JSON framing (FrameCodec, 1 MiB frame cap). Pure TypeScript; no runtime dependencies.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
+  },
+  "devDependencies": {
+    "@swpanel/domain": "0.0.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  }
+}

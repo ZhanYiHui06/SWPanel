@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>组件规范 — SWPanel</title>
+  <link rel="stylesheet" href="../css/globals.css?v=20260810c">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- ═══════════════════════════════════════════════════════
+         Sidebar
+         ═══════════════════════════════════════════════════════ -->
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-mark">S</div>
+        <div>
+          <div class="sidebar-brand-name">SWPanel</div>
+          <div class="sidebar-brand-sub">JANGHI</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="../index.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 6.5L8 2l6 4.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6.5z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6 14V8h4v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          工作台
+        </a>
+        <a href="drawings.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 2.5h7l3 3V13.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M10 2.5v3h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5 8h6M5 10.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          图纸库
+        </a>
+        <a href="runs.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+          建模任务
+        </a>
+        <a href="cost-data.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 1v14M3.5 5h9M4.5 8h7M5.5 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          成本数据
+        </a>
+        <a href="component-spec.html" class="sidebar-item active">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" stroke-dasharray="1.5 1.5"/>
+          </svg>
+          组件规范
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="settings.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="8" cy="8" r="2.25" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8 2.5a5.5 5.5 0 0 0-4.8 2.85M2.8 9.15A5.5 5.5 0 0 0 8 13.5M13.2 9.15A5.5 5.5 0 0 0 8 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          设置
+        </a>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Main Content
+         ═══════════════════════════════════════════════════════ -->
+    <main class="app-main">
+
+      <!-- Topbar -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <h1 class="page-title">组件规范</h1>
+        </div>
+        <div class="topbar-right">
+          <button class="icon-button" title="通知">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2a4 4 0 0 0-4 4v2.5L2.5 10.5h11L12 8.5V6a4 4 0 0 0-4-4zM6.5 12.5a1.5 1.5 0 0 0 3 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Page Body -->
+      <div class="page-content">
+
+        <div class="page-header">
+          <h1 class="page-header-title">组件规范</h1>
+          <p class="page-header-subtitle">SWPanel 设计系统 — 统一组件规范与实时预览</p>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════
+             Section 1: Design Tokens
+             ═══════════════════════════════════════════════════════ -->
+        <section class="spec-section">
+          <div class="spec-section-header">
+            <span class="spec-section-title">设计令牌</span>
+            <span class="spec-section-count">Design Tokens</span>
+          </div>
+
+          <div class="spec-grid">
+
+            <!-- Color Tokens: Core -->
+            <div class="spec-item">
+              <div class="spec-item-label">核心色彩</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--background);"></span><span class="token-name">--background</span></span>
+                  <span class="token-value">#ffffff</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--foreground);"></span><span class="token-name">--foreground</span></span>
+                  <span class="token-value">#0a0a0a</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--card);"></span><span class="token-name">--card</span></span>
+                  <span class="token-value">#ffffff</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--muted);"></span><span class="token-name">--muted</span></span>
+                  <span class="token-value">#f5f5f5</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--muted-foreground);"></span><span class="token-name">--muted-foreground</span></span>
+                  <span class="token-value">#737373</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--border);"></span><span class="token-name">--border</span></span>
+                  <span class="token-value">#e5e5e5</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--primary);"></span><span class="token-name">--primary</span></span>
+                  <span class="token-value">#0a0a0a</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--primary-foreground);"></span><span class="token-name">--primary-foreground</span></span>
+                  <span class="token-value">#fafafa</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--sidebar);"></span><span class="token-name">--sidebar</span></span>
+                  <span class="token-value">#fafafa</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Color Tokens: Success -->
+            <div class="spec-item">
+              <div class="spec-item-label">Success 语义色</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--success);"></span><span class="token-name">--success</span></span>
+                  <span class="token-value">#009645</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--success-subtle);"></span><span class="token-name">--success-subtle</span></span>
+                  <span class="token-value">#ecfdf3</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--success-text);"></span><span class="token-name">--success-text</span></span>
+                  <span class="token-value">#067647</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Color Tokens: Warning -->
+            <div class="spec-item">
+              <div class="spec-item-label">Warning 语义色</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--warning);"></span><span class="token-name">--warning</span></span>
+                  <span class="token-value">#b54708</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--warning-subtle);"></span><span class="token-name">--warning-subtle</span></span>
+                  <span class="token-value">#fffaeb</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--warning-text);"></span><span class="token-name">--warning-text</span></span>
+                  <span class="token-value">#b54708</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Color Tokens: Error -->
+            <div class="spec-item">
+              <div class="spec-item-label">Error 语义色</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--error);"></span><span class="token-name">--error</span></span>
+                  <span class="token-value">#d92d20</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--error-subtle);"></span><span class="token-name">--error-subtle</span></span>
+                  <span class="token-value">#fef3f2</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--error-text);"></span><span class="token-name">--error-text</span></span>
+                  <span class="token-value">#b42318</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Color Tokens: Info -->
+            <div class="spec-item">
+              <div class="spec-item-label">Info 语义色</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--info);"></span><span class="token-name">--info</span></span>
+                  <span class="token-value">#175cd3</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--info-subtle);"></span><span class="token-name">--info-subtle</span></span>
+                  <span class="token-value">#eff8ff</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--info-text);"></span><span class="token-name">--info-text</span></span>
+                  <span class="token-value">#175cd3</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Color Tokens: Neutral -->
+            <div class="spec-item">
+              <div class="spec-item-label">Neutral 语义色</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--neutral);"></span><span class="token-name">--neutral</span></span>
+                  <span class="token-value">#525252</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--neutral-subtle);"></span><span class="token-name">--neutral-subtle</span></span>
+                  <span class="token-value">#f5f5f5</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--neutral-text);"></span><span class="token-name">--neutral-text</span></span>
+                  <span class="token-value">#525252</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Spacing Tokens -->
+            <div class="spec-item">
+              <div class="spec-item-label">间距令牌</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="token-row">
+                  <span class="token-name">--spacing (base)</span>
+                  <span class="token-value">4px</span>
+                </div>
+                <div class="token-row">
+                  <span class="token-name">0.5 × spacing</span>
+                  <span class="token-value">2px</span>
+                </div>
+                <div class="token-row">
+                  <span class="token-name">1 × spacing</span>
+                  <span class="token-value">4px</span>
+                </div>
+                <div class="token-row">
+                  <span class="token-name">2 × spacing</span>
+                  <span class="token-value">8px</span>
+                </div>
+                <div class="token-row">
+                  <span class="token-name">3 × spacing</span>
+                  <span class="token-value">12px</span>
+                </div>
+                <div class="token-row">
+                  <span class="token-name">4 × spacing</span>
+                  <span class="token-value">16px</span>
+                </div>
+                <div class="token-row">
+                  <span class="token-name">5 × spacing</span>
+                  <span class="token-value">20px</span>
+                </div>
+                <div class="token-row">
+                  <span class="token-name">6 × spacing</span>
+                  <span class="token-value">24px</span>
+                </div>
+                <div class="token-row">
+                  <span class="token-name">8 × spacing</span>
+                  <span class="token-value">32px</span>
+                </div>
+                <div class="token-row">
+                  <span class="token-name">10 × spacing</span>
+                  <span class="token-value">40px</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Radius Tokens -->
+            <div class="spec-item">
+              <div class="spec-item-label">圆角令牌</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="token-row">
+                  <span class="token-name">--radius-sm</span>
+                  <span class="token-value">6px</span>
+                </div>
+                <div class="token-row">
+                  <span class="token-name">--radius</span>
+                  <span class="token-value">8px</span>
+                </div>
+                <div class="token-row">
+                  <span class="token-name">--radius-lg</span>
+                  <span class="token-value">10px</span>
+                </div>
+              </div>
+              <div class="spec-item-code">--radius-sm: 6px · --radius: 8px · --radius-lg: 10px</div>
+            </div>
+
+            <!-- Shadow Tokens -->
+            <div class="spec-item">
+              <div class="spec-item-label">阴影令牌</div>
+              <div class="spec-item-preview" style="display:block; gap:16px;">
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--background); box-shadow: var(--shadow-xs);"></span><span class="token-name">--shadow-xs</span></span>
+                  <span class="token-value">0 1px 2px rgba(0,0,0,.03)</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--background); box-shadow: var(--shadow-sm);"></span><span class="token-name">--shadow-sm</span></span>
+                  <span class="token-value">0 1px 3px rgba(0,0,0,.05)</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--background); box-shadow: var(--shadow-md);"></span><span class="token-name">--shadow-md</span></span>
+                  <span class="token-value">0 4px 12px rgba(0,0,0,.06)</span>
+                </div>
+                <div class="token-row">
+                  <span><span class="token-swatch" style="background: var(--background); box-shadow: var(--shadow-focus);"></span><span class="token-name">--shadow-focus</span></span>
+                  <span class="token-value">0 0 0 2px #fff, 0 0 0 4px ring</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Typography: Font Families -->
+            <div class="spec-item">
+              <div class="spec-item-label">字体族</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="token-row">
+                  <span class="token-name">--font-sans</span>
+                  <span class="token-value">Inter</span>
+                </div>
+                <div class="token-row">
+                  <span class="token-name">--font-mono</span>
+                  <span class="token-value">JetBrains Mono</span>
+                </div>
+              </div>
+              <div class="spec-item-code">
+                Inter: 400 / 500 / 600 / 700<br>
+                JetBrains Mono: 400 / 500 / 600
+              </div>
+            </div>
+
+            <!-- Typography: Scale -->
+            <div class="spec-item">
+              <div class="spec-item-label">字号阶</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="token-row">
+                  <span><h1 style="margin:0; font-size:24px;">Heading 1</h1></span>
+                  <span class="token-value">h1 · 24px</span>
+                </div>
+                <div class="token-row">
+                  <span><h2 style="margin:0; font-size:18px;">Heading 2</h2></span>
+                  <span class="token-value">h2 · 18px</span>
+                </div>
+                <div class="token-row">
+                  <span><h3 style="margin:0; font-size:15px;">Heading 3</h3></span>
+                  <span class="token-value">h3 · 15px</span>
+                </div>
+                <div class="token-row">
+                  <span><h4 style="margin:0; font-size:13px;">Heading 4</h4></span>
+                  <span class="token-value">h4 · 13px</span>
+                </div>
+                <div class="token-row">
+                  <span style="font-size:14px;">Body text</span>
+                  <span class="token-value">body · 14px</span>
+                </div>
+                <div class="token-row">
+                  <span class="text-sm">Small text</span>
+                  <span class="token-value">.text-sm · 13px</span>
+                </div>
+                <div class="token-row">
+                  <span class="text-xs text-muted">Extra small</span>
+                  <span class="token-value">.text-xs · 12px</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════
+             Section 2: Layout Components
+             ═══════════════════════════════════════════════════════ -->
+        <section class="spec-section">
+          <div class="spec-section-header">
+            <span class="spec-section-title">布局组件</span>
+            <span class="spec-section-count">4 components</span>
+          </div>
+
+          <div class="spec-grid">
+
+            <!-- AppSidebar -->
+            <div class="spec-item">
+              <div class="spec-item-label">AppSidebar</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="card">
+                  <div class="sidebar-brand" style="border-bottom:1px solid var(--border); padding-bottom:16px; margin-bottom:8px;">
+                    <div class="sidebar-brand-mark">S</div>
+                    <div>
+                      <div class="sidebar-brand-name">SWPanel</div>
+                      <div class="sidebar-brand-sub">JANGHI</div>
+                    </div>
+                  </div>
+                  <div class="sidebar-nav" style="padding:8px 12px;">
+                    <a href="#" class="sidebar-item active" onclick="return false;">工作台</a>
+                    <a href="#" class="sidebar-item" onclick="return false;">图纸库</a>
+                  </div>
+                  <div class="sidebar-footer" style="border-top:1px solid var(--border); padding-top:8px;">
+                    <a href="#" class="sidebar-item" onclick="return false;">设置</a>
+                  </div>
+                </div>
+              </div>
+              <div class="spec-item-code">.app-sidebar > .sidebar-brand + .sidebar-nav > .sidebar-item + .sidebar-footer</div>
+            </div>
+
+            <!-- PageHeader -->
+            <div class="spec-item">
+              <div class="spec-item-label">PageHeader</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="page-header" style="margin-bottom:0;">
+                  <div class="page-header-row" style="margin-bottom:0;">
+                    <div>
+                      <h1 class="page-header-title">图纸详情</h1>
+                      <p class="page-header-subtitle">管理工程图纸与版本</p>
+                    </div>
+                    <button class="btn btn-primary btn-sm">操作</button>
+                  </div>
+                </div>
+              </div>
+              <div class="spec-item-code">.page-header > .page-header-row > .page-header-title + .page-header-subtitle</div>
+            </div>
+
+            <!-- Breadcrumb -->
+            <div class="spec-item">
+              <div class="spec-item-label">Breadcrumb</div>
+              <div class="spec-item-preview">
+                <div class="breadcrumb">
+                  <span class="breadcrumb-item">图纸库</span>
+                  <span class="breadcrumb-sep">/</span>
+                  <span class="breadcrumb-item breadcrumb-item-mono">PDJF480.01.17C-4</span>
+                  <span class="breadcrumb-sep">/</span>
+                  <span class="breadcrumb-item current">V3</span>
+                </div>
+              </div>
+              <div class="spec-item-code">.breadcrumb > .breadcrumb-item + .breadcrumb-sep + .breadcrumb-item.current</div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="spec-item">
+              <div class="spec-item-label">Tabs</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="tabs" style="margin-bottom:0;">
+                  <button class="tab-item active">概览</button>
+                  <button class="tab-item">模型</button>
+                  <button class="tab-item">运行记录</button>
+                </div>
+              </div>
+              <div class="spec-item-code">.tabs > .tab-item.active</div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════
+             Section 3: Action Components
+             ═══════════════════════════════════════════════════════ -->
+        <section class="spec-section">
+          <div class="spec-section-header">
+            <span class="spec-section-title">操作组件</span>
+            <span class="spec-section-count">3 components</span>
+          </div>
+
+          <div class="spec-grid">
+
+            <!-- Button -->
+            <div class="spec-item">
+              <div class="spec-item-label">Button — 变体</div>
+              <div class="spec-item-preview">
+                <button class="btn btn-primary">主要按钮</button>
+                <button class="btn btn-secondary">次要按钮</button>
+                <button class="btn btn-ghost">幽灵按钮</button>
+                <button class="btn btn-ghost-muted">弱化幽灵</button>
+              </div>
+              <div class="spec-item-code">.btn .btn-primary · .btn .btn-secondary · .btn .btn-ghost · .btn .btn-ghost-muted</div>
+            </div>
+
+            <!-- Button Sizes -->
+            <div class="spec-item">
+              <div class="spec-item-label">Button — 尺寸</div>
+              <div class="spec-item-preview">
+                <button class="btn btn-primary btn-sm">小按钮</button>
+                <button class="btn btn-primary">默认按钮</button>
+                <button class="btn btn-primary btn-lg">大按钮</button>
+              </div>
+              <div class="spec-item-code">.btn-sm · (default 36px) · .btn-lg</div>
+            </div>
+
+            <!-- SearchInput -->
+            <div class="spec-item">
+              <div class="spec-item-label">SearchInput</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="search-input input-w-lg">
+                  <svg class="search-input-icon" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                  <input type="text" placeholder="搜索图号 / 名称">
+                </div>
+              </div>
+              <div class="spec-item-code">.search-input > .search-input-icon + input</div>
+            </div>
+
+            <!-- FilterTabs -->
+            <div class="spec-item">
+              <div class="spec-item-label">FilterTabs</div>
+              <div class="spec-item-preview">
+                <div class="filter-tabs">
+                  <button class="filter-tab active">全部</button>
+                  <button class="filter-tab">待处理</button>
+                  <button class="filter-tab">有正式模型</button>
+                  <button class="filter-tab">尚未建模</button>
+                </div>
+              </div>
+              <div class="spec-item-code">.filter-tabs > .filter-tab.active</div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════
+             Section 4: Status & Feedback Components
+             ═══════════════════════════════════════════════════════ -->
+        <section class="spec-section">
+          <div class="spec-section-header">
+            <span class="spec-section-title">状态与反馈组件</span>
+            <span class="spec-section-count">4 components</span>
+          </div>
+
+          <div class="spec-grid">
+
+            <!-- StatusBadge — All Variants -->
+            <div class="spec-item">
+              <div class="spec-item-label">StatusBadge — 全部状态</div>
+              <div class="spec-item-preview" style="display:block; gap:8px;">
+                <div class="flex-row-gap-3 flex-wrap">
+                  <span class="status-badge running">建模中</span>
+                  <span class="status-badge queued">等待执行</span>
+                  <span class="status-badge completed">已完成</span>
+                  <span class="status-badge approved">正式模型</span>
+                </div>
+                <div class="flex-row-gap-3 flex-wrap">
+                  <span class="status-badge pending-review">待审核</span>
+                  <span class="status-badge clarification">需要补充信息</span>
+                  <span class="status-badge failed">建模失败</span>
+                  <span class="status-badge rejected">已驳回</span>
+                </div>
+                <div class="flex-row-gap-3 flex-wrap">
+                  <span class="status-badge cancelled">已取消</span>
+                  <span class="status-badge no-model">尚未建模</span>
+                  <span class="status-badge current-rev">当前版本</span>
+                </div>
+              </div>
+              <div class="spec-item-code">.status-badge.running · .queued · .completed · .approved · .pending-review · .clarification · .failed · .rejected · .cancelled · .no-model · .current-rev</div>
+            </div>
+
+            <!-- StatusBadge — Sizes -->
+            <div class="spec-item">
+              <div class="spec-item-label">StatusBadge — 尺寸</div>
+              <div class="spec-item-preview">
+                <span class="status-badge status-badge-sm completed">已完成</span>
+                <span class="status-badge completed">已完成</span>
+                <span class="status-badge status-badge-lg completed">已完成</span>
+              </div>
+              <div class="spec-item-code">.status-badge-sm · (default 22px) · .status-badge-lg</div>
+            </div>
+
+            <!-- EmptyState -->
+            <div class="spec-item">
+              <div class="spec-item-label">EmptyState</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="card">
+                  <div class="empty-state">
+                    <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 3l8 5v8l-8 5-8-5V8l8-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                      <path d="M4 8l8 5 8-5M12 13v8" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                    </svg>
+                    <div class="empty-state-title">暂无模型</div>
+                    <div class="empty-state-desc">该图纸版本尚未生成 3D 模型，请发起建模任务以创建。</div>
+                    <button class="btn btn-primary btn-sm">发起建模</button>
+                  </div>
+                </div>
+              </div>
+              <div class="spec-item-code">.empty-state > .empty-state-icon + .empty-state-title + .empty-state-desc</div>
+            </div>
+
+            <!-- InlineNotice -->
+            <div class="spec-item">
+              <div class="spec-item-label">InlineNotice — 全部变体</div>
+              <div class="spec-item-preview" style="display:block; gap:8px;">
+                <div class="inline-notice info">
+                  <svg class="inline-notice-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M8 7v3.5M8 5v.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                  <div class="inline-notice-content"><div class="inline-notice-title">提示</div><div class="inline-notice-text">建模任务已加入队列，等待执行。</div></div>
+                </div>
+                <div class="inline-notice warning">
+                  <svg class="inline-notice-icon" viewBox="0 0 16 16" fill="none"><path d="M8 2L14 13H2L8 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M8 6.5v3M8 11v.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                  <div class="inline-notice-content"><div class="inline-notice-title">注意</div><div class="inline-notice-text">该模型存在尺寸冲突，请确认图纸参数。</div></div>
+                </div>
+                <div class="inline-notice success">
+                  <svg class="inline-notice-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 8l1.8 1.8L10.5 6.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <div class="inline-notice-content"><div class="inline-notice-title">成功</div><div class="inline-notice-text">模型已通过全部验证检查。</div></div>
+                </div>
+                <div class="inline-notice error">
+                  <svg class="inline-notice-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M6 6l4 4M10 6l-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                  <div class="inline-notice-content"><div class="inline-notice-title">错误</div><div class="inline-notice-text">建模过程中发生异常，任务已终止。</div></div>
+                </div>
+                <div class="inline-notice neutral">
+                  <svg class="inline-notice-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M8 7v3.5M8 5v.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                  <div class="inline-notice-content"><div class="inline-notice-title">说明</div><div class="inline-notice-text">该版本已被取消，不影响历史模型。</div></div>
+                </div>
+              </div>
+              <div class="spec-item-code">.inline-notice.info · .warning · .success · .error · .neutral</div>
+            </div>
+
+            <!-- Toast -->
+            <div class="spec-item">
+              <div class="spec-item-label">Toast — 全部变体</div>
+              <div class="spec-item-preview" style="display:block; gap:8px;">
+                <div class="toast success">
+                  <svg class="toast-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 8l1.8 1.8L10.5 6.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <div class="toast-content"><div class="toast-title">建模完成</div><div class="toast-text">PDJF480.01.17C-4 · V3 模型已生成</div></div>
+                </div>
+                <div class="toast error">
+                  <svg class="toast-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M6 6l4 4M10 6l-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                  <div class="toast-content"><div class="toast-title">建模失败</div><div class="toast-text">SolidWorks 进程异常退出</div></div>
+                </div>
+                <div class="toast info">
+                  <svg class="toast-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M8 7v3M8 5v.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                  <div class="toast-content"><div class="toast-title">任务已启动</div><div class="toast-text">Run R06 开始执行</div></div>
+                </div>
+                <div class="toast warning">
+                  <svg class="toast-icon" viewBox="0 0 16 16" fill="none"><path d="M8 2L14 13H2L8 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M8 6.5v3M8 11v.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                  <div class="toast-content"><div class="toast-title">需要补充信息</div><div class="toast-text">请回答 2 个澄清问题</div></div>
+                </div>
+              </div>
+              <div class="spec-item-code">.toast.success · .error · .info · .warning</div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════
+             Section 5: Data Display Components
+             ═══════════════════════════════════════════════════════ -->
+        <section class="spec-section">
+          <div class="spec-section-header">
+            <span class="spec-section-title">数据展示组件</span>
+            <span class="spec-section-count">7 components</span>
+          </div>
+
+          <div class="spec-grid">
+
+            <!-- DrawingRow -->
+            <div class="spec-item">
+              <div class="spec-item-label">DrawingRow</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="drawing-list">
+                  <a href="#" class="drawing-row" onclick="return false;">
+                    <div class="drawing-row-main">
+                      <div class="drawing-row-number">PDJF480.01.17C-4</div>
+                      <div class="drawing-row-name">轧辊（二）</div>
+                    </div>
+                    <div class="drawing-row-meta">
+                      <span class="text-mono text-xs text-muted">V3</span>
+                      <span class="status-badge pending-review">待审核</span>
+                      <span class="text-xs text-muted">今天</span>
+                    </div>
+                  </a>
+                  <a href="#" class="drawing-row" onclick="return false;">
+                    <div class="drawing-row-main">
+                      <div class="drawing-row-number">PDJF273.02.08</div>
+                      <div class="drawing-row-name">定径辊</div>
+                    </div>
+                    <div class="drawing-row-meta">
+                      <span class="text-mono text-xs text-muted">V2</span>
+                      <span class="status-badge approved">正式模型</span>
+                      <span class="text-xs text-muted">昨天</span>
+                    </div>
+                  </a>
+                </div>
+              </div>
+              <div class="spec-item-code">.drawing-row > .drawing-row-main (.drawing-row-number + .drawing-row-name) + .drawing-row-meta</div>
+            </div>
+
+            <!-- RevisionItem -->
+            <div class="spec-item">
+              <div class="spec-item-label">RevisionItem</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="revision-list">
+                  <div class="revision-item active" onclick="return false;">
+                    <span class="revision-item-label">V3</span>
+                    <span class="status-badge current-rev">当前</span>
+                  </div>
+                  <div class="revision-item" onclick="return false;">
+                    <span class="revision-item-label">V2</span>
+                  </div>
+                  <div class="revision-item" onclick="return false;">
+                    <span class="revision-item-label">V1</span>
+                  </div>
+                  <div class="revision-item-add" onclick="return false;">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                    新建版本
+                  </div>
+                </div>
+              </div>
+              <div class="spec-item-code">.revision-item.active · .revision-item · .revision-item-add</div>
+            </div>
+
+            <!-- RunCard -->
+            <div class="spec-item">
+              <div class="spec-item-label">RunCard</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="run-card">
+                  <div class="run-card-header">
+                    <div class="run-card-title-group">
+                      <div class="flex-row-gap-3">
+                        <span class="run-card-drawing">PDJF480.01.17C-4</span>
+                        <span class="status-badge running">建模中</span>
+                      </div>
+                      <div class="run-card-partname">轧辊（二）</div>
+                      <div class="run-card-meta mt-2">
+                        <span>V3</span>
+                        <span class="run-card-meta-sep"></span>
+                        <span>Run R05</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="run-card-status-line">
+                    <span class="run-card-stage-label">SolidWorks 建模</span>
+                    <span class="run-card-progress-pct">63%</span>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-bar-fill" style="width: 63%;"></div>
+                  </div>
+                  <div class="run-card-activity">正在创建主要旋转特征</div>
+                </div>
+              </div>
+              <div class="spec-item-code">.run-card > .run-card-header + .run-card-status-line + .progress-bar</div>
+            </div>
+
+            <!-- RunProgress -->
+            <div class="spec-item">
+              <div class="spec-item-label">RunProgress</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="stage-progress">
+                  <div class="stage-step completed">
+                    <div class="stage-step-dot"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9l4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                    <div class="stage-step-label">准备</div>
+                  </div>
+                  <div class="stage-step completed">
+                    <div class="stage-step-dot"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9l4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                    <div class="stage-step-label">分析</div>
+                  </div>
+                  <div class="stage-step active">
+                    <div class="stage-step-dot">3</div>
+                    <div class="stage-step-label">建模</div>
+                  </div>
+                  <div class="stage-step">
+                    <div class="stage-step-dot">4</div>
+                    <div class="stage-step-label">检查</div>
+                  </div>
+                  <div class="stage-step">
+                    <div class="stage-step-dot">5</div>
+                    <div class="stage-step-label">完成</div>
+                  </div>
+                </div>
+              </div>
+              <div class="spec-item-code">.stage-progress > .stage-step.completed · .active · (pending)</div>
+            </div>
+
+            <!-- ModelCard -->
+            <div class="spec-item">
+              <div class="spec-item-label">ModelCard</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="model-card">
+                  <div class="model-card-preview">
+                    <div class="model-card-badge">
+                      <span class="status-badge approved">正式模型</span>
+                    </div>
+                  </div>
+                  <div class="model-card-body">
+                    <div class="model-card-title">
+                      <span class="model-card-id">M03</span>
+                    </div>
+                    <div class="model-card-meta">
+                      <span>V3</span>
+                      <span>·</span>
+                      <span>今天 22:44</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="spec-item-code">.model-card > .model-card-preview + .model-card-body (.model-card-id + .model-card-meta)</div>
+            </div>
+
+            <!-- ModelPreview + DrawingPreview -->
+            <div class="spec-item">
+              <div class="spec-item-label">ModelPreview / DrawingPreview</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="model-preview">
+                  <span class="model-preview-placeholder-label">3D 模型预览</span>
+                </div>
+                <div class="drawing-preview mt-4">
+                  <div class="drawing-preview-inner"></div>
+                </div>
+              </div>
+              <div class="spec-item-code">.model-preview · .drawing-preview > .drawing-preview-inner</div>
+            </div>
+
+            <!-- ValidationList -->
+            <div class="spec-item">
+              <div class="spec-item-label">ValidationList</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="card">
+                  <div class="card-body compact">
+                    <div class="validation-list">
+                      <div class="validation-item">
+                        <div class="validation-item-icon pass">
+                          <svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9l4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                        <span class="validation-item-label">尺寸完整性检查</span>
+                        <span class="validation-item-result pass">通过</span>
+                      </div>
+                      <div class="validation-item">
+                        <div class="validation-item-icon fail">
+                          <svg viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        </div>
+                        <span class="validation-item-label">壁厚最小值检查</span>
+                        <span class="validation-item-result fail">不通过</span>
+                      </div>
+                      <div class="validation-item">
+                        <div class="validation-item-icon pass">
+                          <svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9l4.5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                        <span class="validation-item-label">特征引用检查</span>
+                        <span class="validation-item-result pass">通过</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="spec-item-code">.validation-list > .validation-item (.validation-item-icon.pass / .fail)</div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════
+             Section 6: Data Entry Components
+             ═══════════════════════════════════════════════════════ -->
+        <section class="spec-section">
+          <div class="spec-section-header">
+            <span class="spec-section-title">数据录入组件</span>
+            <span class="spec-section-count">5 components</span>
+          </div>
+
+          <div class="spec-grid">
+
+            <!-- FormField -->
+            <div class="spec-item">
+              <div class="spec-item-label">FormField</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="form-field">
+                  <label class="form-label form-label-required">图号</label>
+                  <input class="form-input" type="text" value="PDJF480.01.17C-4">
+                  <span class="form-hint">请输入完整的工程图号</span>
+                </div>
+              </div>
+              <div class="spec-item-code">.form-field > .form-label.form-label-required + .form-input + .form-hint</div>
+            </div>
+
+            <!-- NumberInput -->
+            <div class="spec-item">
+              <div class="spec-item-label">NumberInput</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="form-field">
+                  <label class="form-label">直径 (mm)</label>
+                  <input class="form-input form-input-number" type="text" value="480.00">
+                </div>
+              </div>
+              <div class="spec-item-code">.form-input.form-input-number (mono · numeric)</div>
+            </div>
+
+            <!-- Select -->
+            <div class="spec-item">
+              <div class="spec-item-label">Select</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="form-field">
+                  <label class="form-label">材质</label>
+                  <select class="form-select">
+                    <option>45钢</option>
+                    <option>40Cr</option>
+                    <option>Q235</option>
+                  </select>
+                </div>
+              </div>
+              <div class="spec-item-code">.form-select (appearance:none + dropdown arrow)</div>
+            </div>
+
+            <!-- Textarea -->
+            <div class="spec-item">
+              <div class="spec-item-label">Textarea</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="form-field">
+                  <label class="form-label">备注</label>
+                  <textarea class="form-textarea" placeholder="输入补充说明...">该零件为轧辊组件，需配合轴承使用。</textarea>
+                </div>
+              </div>
+              <div class="spec-item-code">.form-textarea (resize:vertical · min-height:80px)</div>
+            </div>
+
+            <!-- InputGroup -->
+            <div class="spec-item">
+              <div class="spec-item-label">InputGroup</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="form-field">
+                  <label class="form-label">长度</label>
+                  <div class="input-group">
+                    <input class="form-input form-input-number" type="text" value="1200">
+                    <span class="input-suffix">mm</span>
+                  </div>
+                </div>
+                <div class="form-field mt-4">
+                  <label class="form-label">厚度</label>
+                  <div class="input-group">
+                    <input class="form-input form-input-number" type="text" value="12">
+                    <select class="input-unit-select">
+                      <option>mm</option>
+                      <option>cm</option>
+                      <option>m</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="spec-item-code">.input-group > .form-input + .input-suffix / .input-unit-select</div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════
+             Section 7: Overlay Components
+             ═══════════════════════════════════════════════════════ -->
+        <section class="spec-section">
+          <div class="spec-section-header">
+            <span class="spec-section-title">浮层组件</span>
+            <span class="spec-section-count">4 components</span>
+          </div>
+
+          <div class="spec-grid">
+
+            <!-- ConfirmDialog -->
+            <div class="spec-item">
+              <div class="spec-item-label">ConfirmDialog</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="dialog" style="width:100%; animation:none; box-shadow:var(--shadow-sm);">
+                  <div class="dialog-header">
+                    <div class="dialog-title">确认删除版本</div>
+                  </div>
+                  <div class="dialog-body">
+                    <p class="dialog-text">删除后无法恢复，该版本下的所有模型和运行记录将被永久移除。确定要删除 V2 吗？</p>
+                  </div>
+                  <div class="dialog-footer">
+                    <button class="btn btn-secondary btn-sm">取消</button>
+                    <button class="btn btn-primary btn-sm">确认删除</button>
+                  </div>
+                </div>
+              </div>
+              <div class="spec-item-code">.dialog-overlay > .dialog (.dialog-header + .dialog-body + .dialog-footer)</div>
+            </div>
+
+            <!-- SideDrawer -->
+            <div class="spec-item">
+              <div class="spec-item-label">SideDrawer</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="card" style="overflow:hidden;">
+                  <div class="drawer-header" style="padding:20px 24px;">
+                    <span class="drawer-title">模型详情</span>
+                    <button class="icon-button">
+                      <svg viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                    </button>
+                  </div>
+                  <div class="drawer-body" style="padding:24px;">
+                    <div class="property-list">
+                      <div class="property-row">
+                        <span class="property-key">模型 ID</span>
+                        <span class="property-value mono">M03</span>
+                      </div>
+                      <div class="property-row">
+                        <span class="property-key">版本</span>
+                        <span class="property-value mono">V3</span>
+                      </div>
+                      <div class="property-row">
+                        <span class="property-key">状态</span>
+                        <span class="property-value">正式模型</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="drawer-footer" style="padding:16px 24px;">
+                    <button class="btn btn-secondary btn-sm">关闭</button>
+                    <button class="btn btn-primary btn-sm">下载模型</button>
+                  </div>
+                </div>
+              </div>
+              <div class="spec-item-code">.drawer-overlay > .drawer (.drawer-header + .drawer-body + .drawer-footer)</div>
+            </div>
+
+            <!-- PropertyList -->
+            <div class="spec-item">
+              <div class="spec-item-label">PropertyList</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="card">
+                  <div class="card-body compact">
+                    <div class="property-list">
+                      <div class="property-row">
+                        <span class="property-key">图号</span>
+                        <span class="property-value mono">PDJF480.01.17C-4</span>
+                      </div>
+                      <div class="property-row">
+                        <span class="property-key">名称</span>
+                        <span class="property-value">轧辊（二）</span>
+                      </div>
+                      <div class="property-row">
+                        <span class="property-key">材质</span>
+                        <span class="property-value">45钢</span>
+                      </div>
+                      <div class="property-row">
+                        <span class="property-key">版本数</span>
+                        <span class="property-value mono">3</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="spec-item-code">.property-list > .property-row (.property-key + .property-value.mono)</div>
+            </div>
+
+            <!-- FileList -->
+            <div class="spec-item">
+              <div class="spec-item-label">FileList</div>
+              <div class="spec-item-preview" style="display:block;">
+                <div class="card">
+                  <div class="card-body compact">
+                    <div class="file-list">
+                      <div class="file-item">
+                        <div class="file-item-icon">
+                          <svg viewBox="0 0 16 16" fill="none"><path d="M3 2.5h6l3 3V13.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 2.5v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+                        </div>
+                        <div class="file-item-main">
+                          <div class="file-item-name">PDJF480.01.17C-4.dwg</div>
+                          <div class="file-item-meta">2.4 MB · 今天 14:30</div>
+                        </div>
+                      </div>
+                      <div class="file-item">
+                        <div class="file-item-icon">
+                          <svg viewBox="0 0 16 16" fill="none"><path d="M3 2.5h6l3 3V13.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 2.5v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+                        </div>
+                        <div class="file-item-main">
+                          <div class="file-item-name">PDJF480.01.17C-4.pdf</div>
+                          <div class="file-item-meta">856 KB · 今天 14:31</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="spec-item-code">.file-list > .file-item (.file-item-icon + .file-item-name + .file-item-meta)</div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════
+             Section 8: Business State Mapping
+             ═══════════════════════════════════════════════════════ -->
+        <section class="spec-section">
+          <div class="spec-section-header">
+            <span class="spec-section-title">业务状态映射</span>
+            <span class="spec-section-count">Business State → Visual</span>
+          </div>
+
+          <div class="data-sheet">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 24%;">业务状态</th>
+                  <th style="width: 28%;">CSS 类</th>
+                  <th style="width: 20%;">语义色</th>
+                  <th>实时预览</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="col-result">建模中</td>
+                  <td class="col-mono">.status-badge.running</td>
+                  <td class="col-result-muted">Info 蓝 · 动态</td>
+                  <td><span class="status-badge running">建模中</span></td>
+                </tr>
+                <tr>
+                  <td class="col-result">等待执行</td>
+                  <td class="col-mono">.status-badge.queued</td>
+                  <td class="col-result-muted">Info 蓝 · 弱化</td>
+                  <td><span class="status-badge queued">等待执行</span></td>
+                </tr>
+                <tr>
+                  <td class="col-result">已完成</td>
+                  <td class="col-mono">.status-badge.completed</td>
+                  <td class="col-result-muted">Success 绿</td>
+                  <td><span class="status-badge completed">已完成</span></td>
+                </tr>
+                <tr>
+                  <td class="col-result">正式模型</td>
+                  <td class="col-mono">.status-badge.approved</td>
+                  <td class="col-result-muted">Success 绿</td>
+                  <td><span class="status-badge approved">正式模型</span></td>
+                </tr>
+                <tr>
+                  <td class="col-result">待审核</td>
+                  <td class="col-mono">.status-badge.pending-review</td>
+                  <td class="col-result-muted">Warning 琥珀</td>
+                  <td><span class="status-badge pending-review">待审核</span></td>
+                </tr>
+                <tr>
+                  <td class="col-result">需要补充信息</td>
+                  <td class="col-mono">.status-badge.clarification</td>
+                  <td class="col-result-muted">Warning 琥珀</td>
+                  <td><span class="status-badge clarification">需要补充信息</span></td>
+                </tr>
+                <tr>
+                  <td class="col-result">建模失败</td>
+                  <td class="col-mono">.status-badge.failed</td>
+                  <td class="col-result-muted">Error 红</td>
+                  <td><span class="status-badge failed">建模失败</span></td>
+                </tr>
+                <tr>
+                  <td class="col-result">已驳回</td>
+                  <td class="col-mono">.status-badge.rejected</td>
+                  <td class="col-result-muted">Error 红</td>
+                  <td><span class="status-badge rejected">已驳回</span></td>
+                </tr>
+                <tr>
+                  <td class="col-result">已取消</td>
+                  <td class="col-mono">.status-badge.cancelled</td>
+                  <td class="col-result-muted">Neutral 灰</td>
+                  <td><span class="status-badge cancelled">已取消</span></td>
+                </tr>
+                <tr>
+                  <td class="col-result">尚未建模</td>
+                  <td class="col-mono">.status-badge.no-model</td>
+                  <td class="col-result-muted">Neutral 灰</td>
+                  <td><span class="status-badge no-model">尚未建模</span></td>
+                </tr>
+                <tr>
+                  <td class="col-result">当前版本</td>
+                  <td class="col-mono">.status-badge.current-rev</td>
+                  <td class="col-result-muted">Primary 黑 · 无圆点</td>
+                  <td><span class="status-badge current-rev">当前版本</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,9 @@
+/* ═══════════════════════════════════════════════════════════════
+   SWPanel UI styles — single entry point.
+   Import once in the app entry:  import "@swpanel/ui/styles";
+   ═══════════════════════════════════════════════════════════════ */
+
+@import "./tokens.css";
+@import "./reset.css";
+@import "./layout.css";
+@import "./components.css";

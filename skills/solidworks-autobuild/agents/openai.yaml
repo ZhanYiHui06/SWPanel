@@ -1,0 +1,4 @@
+interface:
+  display_name: "SolidWorks 智能自动建模与 CAD 自动化"
+  short_description: "从机械图纸高精度还原零件模型，支持参数化建模、装配体配合、螺纹孔/CNC特征处理及格式导出"
+  default_prompt: "Use $solidworks-autobuild to build an editable feature-based part model or perform CAD automation tasks in the detected available SolidWorks installation."

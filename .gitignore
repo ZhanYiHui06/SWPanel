@@ -1,0 +1,74 @@
+# Dependencies and package manager caches
+node_modules/
+.npm/
+.pnpm-store/
+
+# Build and test output
+dist/
+**/dist/
+out/
+/out-invalid-*/
+installers/
+installers-invalid-*/
+build/
+coverage/
+test-results/
+playwright-report/
+playwright-report-production/
+.vite/
+apps/desktop/.vite/
+*.tsbuildinfo
+
+# Packaging staging snapshots and temporary verification artifacts.
+# Never reuse or ship these; package:win rebuilds the root package fresh.
+.package-copy/
+.scratch/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs and crash output
+*.log
+logs/
+crash-dumps/
+
+# SWPanel runtime data
+runtime/
+workspaces/
+artifacts/
+.local-data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# SolidWorks business artifacts
+*.SLDPRT
+*.SLDASM
+*.SLDDRW
+*.sldprt
+*.sldasm
+*.slddrw
+
+# CAD conversion and recording output
+*.step
+*.stp
+*.iges
+*.igs
+*.mp4
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local agent harness session data
+.zcode/

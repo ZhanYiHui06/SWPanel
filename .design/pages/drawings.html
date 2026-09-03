@@ -1,0 +1,191 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图纸库 — SWPanel</title>
+  <link rel="stylesheet" href="../css/globals.css?v=20260810">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- ═══════════════════════════════════════════════════════
+         Sidebar (identical across all pages)
+         ═══════════════════════════════════════════════════════ -->
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-mark">S</div>
+        <div>
+          <div class="sidebar-brand-name">SWPanel</div>
+          <div class="sidebar-brand-sub">JANGHI</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="../index.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 6.5L8 2l6 4.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6.5z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6 14V8h4v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          工作台
+        </a>
+        <a href="drawings.html" class="sidebar-item active">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 2.5h7l3 3V13.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M10 2.5v3h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5 8h6M5 10.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          图纸库
+        </a>
+        <a href="runs.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+          建模任务
+        </a>
+        <a href="cost-data.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 1v14M3.5 5h9M4.5 8h7M5.5 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          成本数据
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="settings.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="8" cy="8" r="2.25" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8 2.5a5.5 5.5 0 0 0-4.8 2.85M2.8 9.15A5.5 5.5 0 0 0 8 13.5M13.2 9.15A5.5 5.5 0 0 0 8 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          设置
+        </a>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Main Content
+         ═══════════════════════════════════════════════════════ -->
+    <main class="app-main">
+
+      <!-- Topbar -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <h1 class="page-title">图纸库</h1>
+        </div>
+        <div class="topbar-right">
+          <button class="icon-button" title="通知">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2a4 4 0 0 0-4 4v2.5L2.5 10.5h11L12 8.5V6a4 4 0 0 0-4-4zM6.5 12.5a1.5 1.5 0 0 0 3 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Page Body -->
+      <div class="page-content">
+
+        <!-- Page header with action + search + filters -->
+        <div class="section section-tight">
+          <div class="flex-between mb-5">
+            <div>
+              <h1 class="page-header-title">图纸库</h1>
+              <p class="text-muted text-sm">管理全部工程图纸与版本</p>
+            </div>
+            <button class="btn btn-primary">
+              <svg viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              上传图纸
+            </button>
+          </div>
+
+          <div class="flex-between flex-gap-4 flex-wrap">
+            <div style="display:flex; align-items:center; gap:12px; flex:1; min-width:280px;">
+              <div class="search-input input-w-lg" style="flex:1;">
+                <svg class="search-input-icon" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                <input type="text" placeholder="搜索图号 / 名称">
+              </div>
+            </div>
+            <div class="filter-tabs">
+              <button class="filter-tab active">全部</button>
+              <button class="filter-tab">待处理</button>
+              <button class="filter-tab">有正式模型</button>
+              <button class="filter-tab">尚未建模</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Drawing Data Table -->
+        <div class="data-sheet">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:32%;">图号</th>
+                <th style="width:22%;">名称</th>
+                <th style="width:10%;">当前版本</th>
+                <th style="width:18%;">业务状态</th>
+                <th style="width:14%;">最近更新</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr onclick="window.location.href='drawing-overview.html'" style="cursor:pointer;">
+                <td class="col-mono">PDJF480.01.17C-4</td>
+                <td>轧辊（二）</td>
+                <td class="col-mono col-version">V3</td>
+                <td><span class="status-badge pending-review">待审核</span></td>
+                <td class="col-date">今天 22:44</td>
+                <td class="col-actions">
+                  <button class="btn btn-ghost btn-sm btn-ghost-muted">打开</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="col-mono">PDJF273.02.08</td>
+                <td>定径辊</td>
+                <td class="col-mono col-version">V2</td>
+                <td><span class="status-badge approved">正式模型</span></td>
+                <td class="col-date">昨天</td>
+                <td class="col-actions">
+                  <button class="btn btn-ghost btn-sm btn-ghost-muted">打开</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="col-mono">PDJG159.01.03</td>
+                <td>阶梯轴</td>
+                <td class="col-mono col-version">V1</td>
+                <td><span class="status-badge no-model">尚未建模</span></td>
+                <td class="col-date">08-07</td>
+                <td class="col-actions">
+                  <button class="btn btn-ghost btn-sm btn-ghost-muted">打开</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="col-mono">PDJF508.03.12</td>
+                <td>连轧辊</td>
+                <td class="col-mono col-version">V2</td>
+                <td><span class="status-badge running">建模中</span></td>
+                <td class="col-date">今天 21:18</td>
+                <td class="col-actions">
+                  <button class="btn btn-ghost btn-sm btn-ghost-muted">打开</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="col-mono">PDJF325.04.06</td>
+                <td>矫直辊</td>
+                <td class="col-mono col-version">V1</td>
+                <td><span class="status-badge clarification">需要补充信息</span></td>
+                <td class="col-date">今天 19:32</td>
+                <td class="col-actions">
+                  <button class="btn btn-ghost btn-sm btn-ghost-muted">打开</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

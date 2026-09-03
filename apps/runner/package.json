@@ -1,0 +1,32 @@
+{
+  "name": "@swpanel/runner",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SWPanel Agent Runner process boundary. Phase 2 implements the SQLite WAL persistence layer, the immutable source-file ledger, the Drawing workflow application service and the WP4 Windows Named Pipe IPC boundary (per-user DACL, protocol handshake, server identity, size-capped framing, validation, idempotency); the Electron bridge and Agent/SolidWorks backends remain later phases.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --config vitest.config.ts",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-pdfium-helper.mjs"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
+  },
+  "devDependencies": {
+    "@swpanel/contracts": "0.0.0",
+    "@swpanel/domain": "0.0.0",
+    "@types/node": "24.13.3",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  }
+}

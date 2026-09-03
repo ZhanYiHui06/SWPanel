@@ -1,0 +1,238 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M03 — PDJF480.01.17C-4 — SWPanel</title>
+  <link rel="stylesheet" href="../css/globals.css?v=20260810b">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- ═══════════════════════════════════════════════════════
+         Sidebar
+         ═══════════════════════════════════════════════════════ -->
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-mark">S</div>
+        <div>
+          <div class="sidebar-brand-name">SWPanel</div>
+          <div class="sidebar-brand-sub">JANGHI</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="../index.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 6.5L8 2l6 4.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6.5z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6 14V8h4v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          工作台
+        </a>
+        <a href="drawings.html" class="sidebar-item active">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 2.5h7l3 3V13.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M10 2.5v3h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5 8h6M5 10.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          图纸库
+        </a>
+        <a href="runs.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+          建模任务
+        </a>
+        <a href="cost-data.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 1v14M3.5 5h9M4.5 8h7M5.5 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          成本数据
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="settings.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="8" cy="8" r="2.25" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8 2.5a5.5 5.5 0 0 0-4.8 2.85M2.8 9.15A5.5 5.5 0 0 0 8 13.5M13.2 9.15A5.5 5.5 0 0 0 8 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          设置
+        </a>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Main Content
+         ═══════════════════════════════════════════════════════ -->
+    <main class="app-main">
+
+      <!-- Topbar with Breadcrumb -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <nav class="breadcrumb">
+            <a href="../index.html" class="breadcrumb-item">工作台</a>
+            <span class="breadcrumb-sep">/</span>
+            <a href="drawings.html" class="breadcrumb-item">图纸库</a>
+            <span class="breadcrumb-sep">/</span>
+            <span class="breadcrumb-item breadcrumb-item-mono">PDJF480.01.17C-4</span>
+            <span class="breadcrumb-sep">/</span>
+            <span class="breadcrumb-item current breadcrumb-item-mono">M03</span>
+          </nav>
+        </div>
+        <div class="topbar-right">
+          <button class="icon-button" title="通知">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2a4 4 0 0 0-4 4v2.5L2.5 10.5h11L12 8.5V6a4 4 0 0 0-4-4zM6.5 12.5a1.5 1.5 0 0 0 3 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Page Body -->
+      <div class="page-content wide">
+
+        <!-- ── Model Header ── -->
+        <div class="workspace-header">
+          <div class="workspace-header-top">
+            <div>
+              <div class="flex-row-gap-3">
+                <span class="workspace-drawing-number" style="font-size:18px;">M03</span>
+                <span class="status-badge approved">审核通过</span>
+                <span class="status-badge current-rev">当前正式模型</span>
+              </div>
+              <div class="workspace-drawing-name" style="margin-top:6px;">PDJF480.01.17C-4 · V3 · 轧辊（二）</div>
+            </div>
+            <div class="workspace-header-actions">
+              <button class="btn btn-secondary btn-sm">
+                <svg viewBox="0 0 14 14" fill="none"><path d="M7 1v8m0 0l-3-3m3 3l3-3M1 13h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                在 SolidWorks 中打开
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Main grid-2: Model Preview + Model Info/Validation ── -->
+        <div class="grid-2">
+
+          <!-- Left: Model Preview -->
+          <div class="card">
+            <div class="card-header"><span class="card-title">模型预览</span></div>
+            <div class="card-body">
+              <div class="model-preview aspect-4-3">
+                <svg width="200" height="200" viewBox="0 0 110 110" fill="none">
+                  <ellipse cx="55" cy="25" rx="32" ry="10" stroke="#737373" stroke-width="1.2" fill="#fafafa"/>
+                  <path d="M23 25v60c0 5.5 14.3 10 32 10s32-4.5 32-10V25" stroke="#737373" stroke-width="1.2" fill="#f5f5f5"/>
+                  <ellipse cx="55" cy="85" rx="32" ry="10" stroke="#737373" stroke-width="1.2" fill="none"/>
+                  <ellipse cx="55" cy="25" rx="14" ry="4.5" stroke="#a3a3a3" stroke-width="1" fill="#fff"/>
+                  <path d="M41 25v50c0 2.5 6.3 4.5 14 4.5s14-2 14-4.5V25" stroke="#a3a3a3" stroke-width="1" fill="none"/>
+                  <ellipse cx="55" cy="75" rx="14" ry="4.5" stroke="#a3a3a3" stroke-width="1" fill="none"/>
+                  <path d="M23 45h64" stroke="#a3a3a3" stroke-width="0.8" stroke-dasharray="2 2"/>
+                </svg>
+                <div class="model-preview-placeholder-label">MODEL M03 · SLDPRT</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Model Info + Validation (stacked) -->
+          <div>
+
+            <!-- Card A: Model Info -->
+            <div class="card mb-6">
+              <div class="card-header"><span class="card-title">模型信息</span></div>
+              <div class="card-body">
+                <div class="property-list">
+                  <div class="property-row"><span class="property-key">图号</span><span class="property-value mono">PDJF480.01.17C-4</span></div>
+                  <div class="property-row"><span class="property-key">版本</span><span class="property-value mono">V3</span></div>
+                  <div class="property-row"><span class="property-key">来源 Run</span><span class="property-value mono">R05</span></div>
+                  <div class="property-row"><span class="property-key">生成时间</span><span class="property-value text-sm" style="font-weight:400;">今天 22:44</span></div>
+                  <div class="property-row"><span class="property-key">文件格式</span><span class="property-value mono">SLDPRT</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card B: Validation -->
+            <div class="card">
+              <div class="card-header"><span class="card-title">Validation</span></div>
+              <div class="card-body">
+                <div class="validation-list">
+                  <div class="validation-item">
+                    <div class="validation-item-icon pass"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6l2.5 2.5L9.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                    <span class="validation-item-label">Rebuild</span>
+                    <span class="validation-item-result pass">通过</span>
+                  </div>
+                  <div class="validation-item">
+                    <div class="validation-item-icon pass"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6l2.5 2.5L9.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                    <span class="validation-item-label">Body Count</span>
+                    <span class="validation-item-result pass">1 body</span>
+                  </div>
+                  <div class="validation-item">
+                    <div class="validation-item-icon pass"><svg viewBox="0 0 12 12" fill="none"><path d="M2.5 6l2.5 2.5L9.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                    <span class="validation-item-label">Dimension Check</span>
+                    <span class="validation-item-result pass">通过</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── Technical Artifacts ── -->
+        <div class="card mt-6">
+          <div class="card-header"><span class="card-title">技术文件</span></div>
+          <div class="card-body">
+            <div class="file-list">
+              <div class="file-item">
+                <div class="file-item-icon"><svg viewBox="0 0 16 16" fill="none"><path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M10 2v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
+                <div class="file-item-main">
+                  <div class="file-item-name">Dimension Ledger</div>
+                  <div class="file-item-meta">dimension_ledger.json · 12.4 KB</div>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="icon-muted"><path d="M8 2v9m0 0l-3-3m3 3l3-3M3 14h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="file-item">
+                <div class="file-item-icon"><svg viewBox="0 0 16 16" fill="none"><path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M10 2v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
+                <div class="file-item-main">
+                  <div class="file-item-name">Feature Plan</div>
+                  <div class="file-item-meta">feature_plan.json · 8.2 KB</div>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="icon-muted"><path d="M8 2v9m0 0l-3-3m3 3l3-3M3 14h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="file-item">
+                <div class="file-item-icon"><svg viewBox="0 0 16 16" fill="none"><path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M10 2v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
+                <div class="file-item-main">
+                  <div class="file-item-name">Validation Log</div>
+                  <div class="file-item-meta">validation_log.txt · 4.6 KB</div>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="icon-muted"><path d="M8 2v9m0 0l-3-3m3 3l3-3M3 14h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="file-item">
+                <div class="file-item-icon"><svg viewBox="0 0 16 16" fill="none"><path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M10 2v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
+                <div class="file-item-main">
+                  <div class="file-item-name">Builder Source</div>
+                  <div class="file-item-meta">builder_source.py · 15.8 KB</div>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="icon-muted"><path d="M8 2v9m0 0l-3-3m3 3l3-3M3 14h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Approved State Notice ── -->
+        <div class="inline-notice success mt-6">
+          <svg class="inline-notice-icon" viewBox="0 0 16 16" fill="none"><path d="M8 2l6 11H2L8 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M8 7v2.5M8 11.5v.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          <div class="inline-notice-content">
+            <div class="inline-notice-title">审核通过</div>
+            <div class="inline-notice-text">该模型已通过人工审核，为当前正式模型。可用于生成成本测算报告。</div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

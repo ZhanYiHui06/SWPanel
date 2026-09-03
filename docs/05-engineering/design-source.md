@@ -10,7 +10,7 @@ last_updated: 2026-08-10
 SWPanel 已确认的高保真 UI 原型由 TRAE Design 生成，并位于正式开发工作目录下：
 
 ```text
-./design
+./.design
 ```
 
 该目录是 **UI / 视觉实现的 Source of Truth**，与 GitHub 仓库中的产品文档共同构成开发输入。
@@ -26,7 +26,7 @@ GitHub 文档决定：
 - 页面职责和信息架构；
 - 已确认产品决策。
 
-本地 `./design` 决定：
+本地 `./.design` 决定：
 
 - 已确认页面布局；
 - 视觉层级；
@@ -36,23 +36,23 @@ GitHub 文档决定：
 - 组件外观；
 - 页面级 UI 呈现。
 
-如果 `./design` 与产品文档在业务行为上冲突，以产品文档为准，并记录冲突；不得静默修改业务规则。
+如果 `./.design` 与产品文档在业务行为上冲突，以产品文档为准，并记录冲突；不得静默修改业务规则。
 
 ## 2. 开发前必须审计
 
-主开发 Agent 在 Phase 0 中必须实际读取 `./design`，而不是只根据截图或文件名猜测原型结构。
+主开发 Agent 在 Phase 0 中必须实际读取 `./.design`，而不是只根据截图或文件名猜测原型结构。
 
 至少检查：
 
 ```text
-./design/index.html
-./design/pages/
-./design/css/
-./design/assets/
-./design/project.json
+./.design/index.html
+./.design/pages/
+./.design/css/
+./.design/assets/
+./.design/project.json
 ```
 
-以及 `./design` 中实际存在的其他文件。
+以及 `./.design` 中实际存在的其他文件。
 
 审计内容至少包括：
 
@@ -69,7 +69,7 @@ GitHub 文档决定：
 
 ## 3. 工程化原则
 
-`./design` 是高保真原型，不默认视为 Production Frontend 代码。
+`./.design` 是高保真原型，不默认视为 Production Frontend 代码。
 
 正式开发应：
 
@@ -78,14 +78,14 @@ GitHub 文档决定：
 3. 建立真实 Router、Domain Type、State / Application Layer 与数据接口；
 4. 避免直接复制大量静态 HTML / CSS 形成不可维护页面；
 5. 不以“工程化”为理由重新设计已经确认的 UI；
-6. 不把 Runtime Data、真实客户文件、Secret 写入 `./design` 或公开仓库。
+6. 不把 Runtime Data、真实客户文件、Secret 写入 `./.design` 或公开仓库。
 
 ## 4. 路径约定
 
 除非用户后续明确改变工作目录结构，所有开发 Agent 均应将：
 
 ```text
-./design
+./.design
 ```
 
 解释为 **当前项目根工作目录下的 TRAE Design 高保真原型目录**。

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>成本测算参数确认 — SWPanel</title>
+  <link rel="stylesheet" href="../css/globals.css?v=20260810b">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- ═══════════════════════════════════════════════════════
+         Sidebar
+         ═══════════════════════════════════════════════════════ -->
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-mark">S</div>
+        <div>
+          <div class="sidebar-brand-name">SWPanel</div>
+          <div class="sidebar-brand-sub">JANGHI</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="../index.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 6.5L8 2l6 4.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6.5z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6 14V8h4v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          工作台
+        </a>
+        <a href="drawings.html" class="sidebar-item active">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 2.5h7l3 3V13.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M10 2.5v3h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5 8h6M5 10.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          图纸库
+        </a>
+        <a href="runs.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+          建模任务
+        </a>
+        <a href="cost-data.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 1v14M3.5 5h9M4.5 8h7M5.5 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          成本数据
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="settings.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="8" cy="8" r="2.25" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8 2.5a5.5 5.5 0 0 0-4.8 2.85M2.8 9.15A5.5 5.5 0 0 0 8 13.5M13.2 9.15A5.5 5.5 0 0 0 8 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          设置
+        </a>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Main Content
+         ═══════════════════════════════════════════════════════ -->
+    <main class="app-main">
+
+      <!-- Topbar with Breadcrumb -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <nav class="breadcrumb">
+            <a href="drawings.html" class="breadcrumb-item">图纸库</a>
+            <span class="breadcrumb-sep">/</span>
+            <span class="breadcrumb-item current breadcrumb-item-mono">PDJF480.01.17C-4</span>
+            <span class="breadcrumb-sep">/</span>
+            <span class="breadcrumb-item current">成本测算参数确认</span>
+          </nav>
+        </div>
+        <div class="topbar-right">
+          <button class="icon-button" title="通知">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2a4 4 0 0 0-4 4v2.5L2.5 10.5h11L12 8.5V6a4 4 0 0 0-4-4zM6.5 12.5a1.5 1.5 0 0 0 3 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Page Body -->
+      <div class="page-content">
+
+        <!-- ── Page Header ── -->
+        <div class="section section-tight">
+          <div class="flex-between">
+            <div>
+              <h1 class="page-header-title">成本测算参数确认</h1>
+              <p class="text-muted text-sm">确认参数后生成内部成本测算报告</p>
+            </div>
+            <a href="drawing-costs.html" class="btn btn-ghost btn-sm">返回</a>
+          </div>
+        </div>
+
+        <!-- ── Two-column: Model Info + Parameter Form ── -->
+        <div class="grid-2">
+
+          <!-- Left: Model Preview + Info -->
+          <div class="card">
+            <div class="card-header"><span class="card-title">模型信息</span></div>
+            <div class="card-body">
+              <!-- Model preview (small isometric cylinder SVG) -->
+              <div class="model-preview" style="aspect-ratio: 4/3; margin-bottom:16px;">
+                <svg width="100" height="100" viewBox="0 0 110 110" fill="none">
+                  <ellipse cx="55" cy="25" rx="32" ry="10" stroke="#737373" stroke-width="1.2" fill="#fafafa"/>
+                  <path d="M23 25v60c0 5.5 14.3 10 32 10s32-4.5 32-10V25" stroke="#737373" stroke-width="1.2" fill="#f5f5f5"/>
+                  <ellipse cx="55" cy="85" rx="32" ry="10" stroke="#737373" stroke-width="1.2" fill="none"/>
+                  <ellipse cx="55" cy="25" rx="14" ry="4.5" stroke="#a3a3a3" stroke-width="1" fill="#fff"/>
+                  <path d="M41 25v50c0 2.5 6.3 4.5 14 4.5s14-2 14-4.5V25" stroke="#a3a3a3" stroke-width="1" fill="none"/>
+                  <ellipse cx="55" cy="75" rx="14" ry="4.5" stroke="#a3a3a3" stroke-width="1" fill="none"/>
+                </svg>
+                <div class="model-preview-placeholder-label">MODEL M03</div>
+              </div>
+              <!-- Property list -->
+              <div class="property-list">
+                <div class="property-row"><span class="property-key">图号</span><span class="property-value mono">PDJF480.01.17C-4</span></div>
+                <div class="property-row"><span class="property-key">版本</span><span class="property-value mono">V3</span></div>
+                <div class="property-row"><span class="property-key">模型</span><span class="property-value mono">M03</span></div>
+                <div class="property-row"><span class="property-key">成品体积</span><span class="property-value mono">0.031 m³</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Parameter Form -->
+          <div class="card">
+            <div class="card-header"><span class="card-title">测算参数</span></div>
+            <div class="card-body">
+              <div style="display:flex; flex-direction:column; gap:20px;">
+                <!-- 数量 -->
+                <div class="form-field">
+                  <label class="form-label">数量</label>
+                  <input type="number" class="form-input mono" value="10" style="max-width:200px;">
+                </div>
+                <!-- 材料 -->
+                <div class="form-field">
+                  <label class="form-label">材料</label>
+                  <select class="form-select input-w-md">
+                    <option selected>42CrMo</option>
+                    <option>45#钢</option>
+                    <option>40Cr</option>
+                  </select>
+                  <span class="form-hint">来自版本记忆中的 Revision Facts</span>
+                </div>
+                <!-- 毛坯类型 -->
+                <div class="form-field">
+                  <label class="form-label">毛坯类型</label>
+                  <select class="form-select input-w-md">
+                    <option selected>圆柱料</option>
+                    <option>矩形料</option>
+                  </select>
+                  <span class="form-hint">系统推荐，可修改</span>
+                </div>
+                <!-- 毛坯尺寸 -->
+                <div class="form-field">
+                  <label class="form-label">毛坯尺寸</label>
+                  <input type="text" class="form-input mono" value="Ø320 × 820 mm" style="max-width:280px;">
+                  <span class="form-hint">系统推荐，可修改</span>
+                </div>
+                <!-- 加工余量 -->
+                <div class="form-row">
+                  <div class="form-field">
+                    <label class="form-label">直径方向余量</label>
+                    <div class="input-group" style="max-width:200px;">
+                      <input type="text" class="form-input mono" value="+20">
+                      <span class="input-suffix">mm</span>
+                    </div>
+                  </div>
+                  <div class="form-field">
+                    <label class="form-label">长度方向余量</label>
+                    <div class="input-group" style="max-width:200px;">
+                      <input type="text" class="form-input mono" value="+20">
+                      <span class="input-suffix">mm</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ── Cost Data Summary ── -->
+        <div class="card mt-6">
+          <div class="card-header"><span class="card-title">成本数据摘要</span></div>
+          <div class="card-body">
+            <div class="grid-2">
+              <div class="property-list">
+                <div class="property-row"><span class="property-key">材料价格</span><span class="property-value mono">5200 元/吨</span></div>
+                <div class="property-row"><span class="property-key">材料密度</span><span class="property-value mono">7.85 g/cm³</span></div>
+              </div>
+              <div class="property-list">
+                <div class="property-row"><span class="property-key">基础加工成本</span><span class="property-value mono">¥500 / 件</span></div>
+                <div class="property-row"><span class="property-key">检测成本</span><span class="property-value mono">¥100 / 件</span></div>
+                <div class="property-row"><span class="property-key">包装成本</span><span class="property-value mono">¥80 / 批次</span></div>
+              </div>
+            </div>
+            <p class="form-hint mt-3">全局固定成本默认全部参与本次测算</p>
+          </div>
+        </div>
+
+        <!-- ── Action Bar ── -->
+        <div class="action-row-end mt-6">
+          <a href="drawing-costs.html" class="btn btn-secondary">取消</a>
+          <a href="cost-report.html" class="btn btn-primary">生成成本测算报告</a>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

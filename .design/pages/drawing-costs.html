@@ -1,0 +1,255 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>成本测算 — PDJF480.01.17C-4 — SWPanel</title>
+  <link rel="stylesheet" href="../css/globals.css?v=20260810b">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- ═══════════════════════════════════════════════════════
+         Sidebar
+         ═══════════════════════════════════════════════════════ -->
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-mark">S</div>
+        <div>
+          <div class="sidebar-brand-name">SWPanel</div>
+          <div class="sidebar-brand-sub">JANGHI</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="../index.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 6.5L8 2l6 4.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6.5z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6 14V8h4v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          工作台
+        </a>
+        <a href="drawings.html" class="sidebar-item active">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 2.5h7l3 3V13.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M10 2.5v3h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5 8h6M5 10.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          图纸库
+        </a>
+        <a href="runs.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+          建模任务
+        </a>
+        <a href="cost-data.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 1v14M3.5 5h9M4.5 8h7M5.5 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          成本数据
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="settings.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="8" cy="8" r="2.25" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8 2.5a5.5 5.5 0 0 0-4.8 2.85M2.8 9.15A5.5 5.5 0 0 0 8 13.5M13.2 9.15A5.5 5.5 0 0 0 8 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          设置
+        </a>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Main Content
+         ═══════════════════════════════════════════════════════ -->
+    <main class="app-main">
+
+      <!-- Topbar with Breadcrumb -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <nav class="breadcrumb">
+            <a href="../index.html" class="breadcrumb-item">工作台</a>
+            <span class="breadcrumb-sep">/</span>
+            <a href="drawings.html" class="breadcrumb-item">图纸库</a>
+            <span class="breadcrumb-sep">/</span>
+            <span class="breadcrumb-item current breadcrumb-item-mono">PDJF480.01.17C-4</span>
+          </nav>
+        </div>
+        <div class="topbar-right">
+          <button class="icon-button" title="通知">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2a4 4 0 0 0-4 4v2.5L2.5 10.5h11L12 8.5V6a4 4 0 0 0-4-4zM6.5 12.5a1.5 1.5 0 0 0 3 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Page Body -->
+      <div class="page-content wide">
+
+        <!-- ── Drawing Header ── -->
+        <div class="workspace-header">
+          <div class="workspace-header-top">
+            <div>
+              <div class="workspace-drawing-number">PDJF480.01.17C-4</div>
+              <div class="workspace-drawing-name">轧辊（二）</div>
+            </div>
+            <div class="workspace-header-actions">
+              <button class="btn btn-secondary btn-sm">
+                <svg viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                新增版本
+              </button>
+              <button class="btn btn-primary btn-sm">
+                <svg viewBox="0 0 14 14" fill="none"><path d="M3.5 2l7 5-7 5V2z" fill="currentColor"/></svg>
+                开始自动建模
+              </button>
+              <button class="icon-button" title="更多">
+                <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3.5" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="12.5" r="1" fill="currentColor"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Revision Nav + Workspace ── -->
+        <div class="grid-sidebar-main">
+
+          <!-- Left: Revision Navigation -->
+          <aside class="revision-sidebar">
+            <div class="revision-sidebar-label">版本</div>
+            <div class="revision-list">
+              <div class="revision-item active">
+                <span class="revision-item-label">V3</span>
+                <span class="status-badge current-rev">当前</span>
+              </div>
+              <div class="revision-item">
+                <span class="revision-item-label">V2</span>
+              </div>
+              <div class="revision-item">
+                <span class="revision-item-label">V1</span>
+              </div>
+            </div>
+            <div class="revision-item-add">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              新增版本
+            </div>
+          </aside>
+
+          <!-- Right: Revision Workspace -->
+          <div>
+            <!-- Revision Header -->
+            <div class="revision-workspace-header">
+              <div class="revision-workspace-title">PDJF480.01.17C-4 · V3</div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+              <a href="drawing-overview.html" class="tab-item">概览</a>
+              <a href="drawing-runs.html" class="tab-item">建模记录</a>
+              <a href="drawing-models.html" class="tab-item">模型</a>
+              <a href="drawing-costs.html" class="tab-item active">成本测算</a>
+              <a href="drawing-memory.html" class="tab-item">版本记忆</a>
+            </div>
+
+            <!-- Cost Estimates Content -->
+            <div>
+
+              <!-- Section 1: Current Approved Model -->
+              <div class="section">
+                <div class="card">
+                  <div class="card-header">
+                    <span class="card-title">当前正式模型</span>
+                    <span class="status-badge approved">审核通过</span>
+                  </div>
+                  <div class="card-body">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:24px;">
+                      <div style="display:flex; align-items:center; gap:16px;">
+                        <span class="text-mono" style="font-size:18px; font-weight:600;">M03</span>
+                        <div>
+                          <div class="text-sm" style="font-weight:500;">来源 R05 · 今天 22:44</div>
+                          <div class="text-xs text-muted" style="margin-top:2px;">基于当前正式模型生成内部成本测算报告</div>
+                        </div>
+                      </div>
+                      <a href="cost-params.html" class="btn btn-primary">
+                        <svg viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        生成成本测算报告
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Section 2: Historical Reports -->
+              <div class="section">
+                <div class="section-header">
+                  <span class="section-title">历史报告</span>
+                </div>
+                <div class="data-sheet">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>报告</th>
+                        <th>生成时间</th>
+                        <th>数量</th>
+                        <th>单件估算成本</th>
+                        <th>总估算成本</th>
+                        <th class="col-actions"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td class="col-mono">Q03</td>
+                        <td>今天 23:21</td>
+                        <td>10</td>
+                        <td class="col-mono">¥3,280</td>
+                        <td class="col-mono">¥32,800</td>
+                        <td class="col-actions">
+                          <a href="cost-report.html" class="btn btn-ghost btn-sm btn-ghost-muted">查看详情</a>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="col-mono">Q02</td>
+                        <td>08-07 16:18</td>
+                        <td>1</td>
+                        <td class="col-mono">¥3,400</td>
+                        <td class="col-mono">¥3,400</td>
+                        <td class="col-actions">
+                          <a href="cost-report.html" class="btn btn-ghost btn-sm btn-ghost-muted">查看详情</a>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="col-mono">Q01</td>
+                        <td>08-06 10:42</td>
+                        <td>5</td>
+                        <td class="col-mono">¥3,350</td>
+                        <td class="col-mono">¥16,750</td>
+                        <td class="col-actions">
+                          <a href="cost-report.html" class="btn btn-ghost btn-sm btn-ghost-muted">查看详情</a>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="inline-notice neutral mt-6">
+                  <svg class="inline-notice-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 7v4M8 5v.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                  <div class="inline-notice-content">
+                    <div class="inline-notice-text">成本测算报告为内部成本参考，不构成最终对客报价。</div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -39,11 +39,17 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 
 ### 工程计划
 
+- [`docs/05-engineering/design-source.md`](docs/05-engineering/design-source.md) — 本地 `.design` 高保真原型的视觉 Source of Truth 与工程化规则
 - [`docs/05-engineering/development-plan.md`](docs/05-engineering/development-plan.md) — 从 TRAE Design 原型到本地 Windows MVP 的阶段开发路线图、工程边界、Exit Gate 与 Definition of Done
+- [`docs/05-engineering/architecture.md`](docs/05-engineering/architecture.md) — Windows Desktop、Agent Runner、Persistence、Artifact、Security、Recovery 与测试架构
+- [`docs/05-engineering/implementation-status.md`](docs/05-engineering/implementation-status.md) — 当前 Phase、验证结果、Blocker 与下一步
 
 ### 决策记录
 
 - [`docs/decisions/decision-log.md`](docs/decisions/decision-log.md) — 重要产品决策及其原因
+- [`docs/decisions/adr-001-desktop-runtime-and-process-boundaries.md`](docs/decisions/adr-001-desktop-runtime-and-process-boundaries.md) — Electron 与独立 Agent Runner 进程边界
+- [`docs/decisions/adr-002-local-persistence-files-and-secrets.md`](docs/decisions/adr-002-local-persistence-files-and-secrets.md) — SQLite、NTFS Artifact 与 Windows Credential Manager
+- [`docs/decisions/adr-003-drawing-modeling-agent-contract.md`](docs/decisions/adr-003-drawing-modeling-agent-contract.md) — 图纸建模 Skill 与 Agent Contract 边界
 
 ## 后续逐步建立
 
@@ -51,8 +57,6 @@ Coding Agent 在实现前应优先阅读 `stable` 文档；若实现需求与 `s
 
 - `docs/02-workflows/drawing-workflow.md`
 - `docs/04-agent/`
-- `docs/05-engineering/architecture.md`
-- `docs/05-engineering/implementation-status.md`
 - `docs/06-evaluation/`
 
 后续还将独立设计 `Customer Quotation` 模块，用于从内部成本测算结果出发形成人工确认的最终对客报价与 PDF。

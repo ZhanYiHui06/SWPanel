@@ -1,0 +1,35 @@
+{
+  "name": "@swpanel/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev:renderer": "vite --config vite.config.ts",
+    "typecheck": "tsc -p tsconfig.renderer.json && tsc -p tsconfig.electron.json --noEmit",
+    "test": "vitest run --config vitest.config.ts",
+    "build:renderer": "vite build --config vite.config.ts",
+    "build:electron": "node scripts/build-electron.mjs",
+    "build": "npm run build:renderer && npm run build:electron"
+  },
+  "dependencies": {
+    "@swpanel/domain": "0.0.0",
+    "@swpanel/ui": "0.1.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-router-dom": "7.18.2"
+  },
+  "devDependencies": {
+    "@swpanel/domain": "0.0.0",
+    "@swpanel/runner": "0.0.0",
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "43.3.0",
+    "esbuild": "0.28.2",
+    "typescript": "6.0.3",
+    "vite": "7.3.6",
+    "vitest": "4.1.10"
+  }
+}

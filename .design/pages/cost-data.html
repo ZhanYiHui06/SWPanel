@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>成本数据 — SWPanel</title>
+  <link rel="stylesheet" href="../css/globals.css?v=20260810b">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- ═══════════════════════════════════════════════════════
+         Sidebar (identical across all pages)
+         ═══════════════════════════════════════════════════════ -->
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-mark">S</div>
+        <div>
+          <div class="sidebar-brand-name">SWPanel</div>
+          <div class="sidebar-brand-sub">JANGHI</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="../index.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 6.5L8 2l6 4.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6.5z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6 14V8h4v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          工作台
+        </a>
+        <a href="drawings.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 2.5h7l3 3V13.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M10 2.5v3h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5 8h6M5 10.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          图纸库
+        </a>
+        <a href="runs.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+          建模任务
+        </a>
+        <a href="cost-data.html" class="sidebar-item active">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 1v14M3.5 5h9M4.5 8h7M5.5 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          成本数据
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="settings.html" class="sidebar-item">
+          <svg class="sidebar-item-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="8" cy="8" r="2.25" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8 2.5a5.5 5.5 0 0 0-4.8 2.85M2.8 9.15A5.5 5.5 0 0 0 8 13.5M13.2 9.15A5.5 5.5 0 0 0 8 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          设置
+        </a>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Main Content
+         ═══════════════════════════════════════════════════════ -->
+    <main class="app-main">
+
+      <!-- Topbar -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <h1 class="page-title">成本数据</h1>
+        </div>
+        <div class="topbar-right">
+          <button class="icon-button" title="通知">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2a4 4 0 0 0-4 4v2.5L2.5 10.5h11L12 8.5V6a4 4 0 0 0-4-4zM6.5 12.5a1.5 1.5 0 0 0 3 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Page Body -->
+      <div class="page-content">
+
+        <!-- Page header -->
+        <div class="section section-tight">
+          <div class="flex-between">
+            <div>
+              <h1 class="page-header-title">成本数据</h1>
+              <p class="text-muted text-sm">企业级材料、加工余量与固定成本配置</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab-item active">材料数据</button>
+          <button class="tab-item">加工余量</button>
+          <button class="tab-item">固定成本</button>
+        </div>
+
+        <!-- Tab 1: 材料数据 -->
+        <div class="section">
+          <div class="flex-between mb-4">
+            <div class="search-input input-w-md">
+              <svg class="search-input-icon" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              <input type="text" placeholder="搜索材料">
+            </div>
+            <button class="btn btn-primary btn-sm">
+              <svg viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              新增材料
+            </button>
+          </div>
+
+          <div class="data-sheet">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:30%;">材料</th>
+                  <th style="width:18%;">采购价格</th>
+                  <th style="width:14%;">价格单位</th>
+                  <th style="width:18%;">密度</th>
+                  <th style="width:14%;">最后更新</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="col-mono">42CrMo</td>
+                  <td class="col-mono">5200</td>
+                  <td class="col-mono">元/吨</td>
+                  <td class="col-mono">7.85 g/cm³</td>
+                  <td class="col-date">今天</td>
+                  <td class="col-actions"><button class="btn btn-ghost btn-sm btn-ghost-muted">编辑</button></td>
+                </tr>
+                <tr>
+                  <td class="col-mono">45#钢</td>
+                  <td class="col-mono">4800</td>
+                  <td class="col-mono">元/吨</td>
+                  <td class="col-mono">7.85 g/cm³</td>
+                  <td class="col-date">昨天</td>
+                  <td class="col-actions"><button class="btn btn-ghost btn-sm btn-ghost-muted">编辑</button></td>
+                </tr>
+                <tr>
+                  <td class="col-mono">40Cr</td>
+                  <td class="col-mono">5000</td>
+                  <td class="col-mono">元/吨</td>
+                  <td class="col-mono">7.85 g/cm³</td>
+                  <td class="col-date">08-08</td>
+                  <td class="col-actions"><button class="btn btn-ghost btn-sm btn-ghost-muted">编辑</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2: 加工余量 -->
+        <div class="section mt-6">
+          <div class="section-header"><div class="section-title">加工余量</div></div>
+          <div class="data-sheet">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:25%;">毛坯类型</th>
+                  <th style="width:25%;">方向</th>
+                  <th style="width:25%;">默认余量</th>
+                  <th style="width:25%;">最后更新</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>圆柱毛坯</td><td class="col-mono">直径方向</td><td class="col-mono">+20 mm</td><td class="col-date">今天</td></tr>
+                <tr><td>圆柱毛坯</td><td class="col-mono">长度方向</td><td class="col-mono">+20 mm</td><td class="col-date">今天</td></tr>
+                <tr><td>矩形毛坯</td><td class="col-mono">长度方向</td><td class="col-mono">+20 mm</td><td class="col-date">今天</td></tr>
+                <tr><td>矩形毛坯</td><td class="col-mono">宽度方向</td><td class="col-mono">+20 mm</td><td class="col-date">今天</td></tr>
+                <tr><td>矩形毛坯</td><td class="col-mono">高度方向</td><td class="col-mono">+20 mm</td><td class="col-date">今天</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 3: 固定成本 -->
+        <div class="section mt-6">
+          <div class="section-header">
+            <div class="section-title">固定成本</div>
+            <button class="btn btn-primary btn-sm">
+              <svg viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              新增成本项
+            </button>
+          </div>
+          <div class="data-sheet">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:30%;">成本项</th>
+                  <th style="width:20%;">金额</th>
+                  <th style="width:20%;">单位</th>
+                  <th style="width:20%;">最后更新</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>基础加工成本</td><td class="col-mono">¥500</td><td class="col-mono">/ 件</td><td class="col-date">今天</td><td class="col-actions"><button class="btn btn-ghost btn-sm btn-ghost-muted">编辑</button></td></tr>
+                <tr><td>检测成本</td><td class="col-mono">¥100</td><td class="col-mono">/ 件</td><td class="col-date">今天</td><td class="col-actions"><button class="btn btn-ghost btn-sm btn-ghost-muted">编辑</button></td></tr>
+                <tr><td>包装成本</td><td class="col-mono">¥80</td><td class="col-mono">/ 批次</td><td class="col-date">今天</td><td class="col-actions"><button class="btn btn-ghost btn-sm btn-ghost-muted">编辑</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="text-muted text-sm mt-3">全局固定成本默认参与每次成本测算。</p>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>
