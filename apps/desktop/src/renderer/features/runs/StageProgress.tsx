@@ -13,6 +13,12 @@ export interface StageProgressProps {
   readonly label?: string;
 }
 
+const STATE_TEXT: Readonly<Record<StageState, string>> = {
+  completed: "（已完成）",
+  active: "（进行中）",
+  pending: "（待处理）"
+};
+
 function stepState(index: number, reached: number, live: boolean): StageState {
   if (index < reached) return "completed";
   if (index === reached) return live ? "active" : "completed";
@@ -33,7 +39,7 @@ export function StageProgress({ stage, live = false }: StageProgressProps): Reac
       {SIX_STAGES.map((item: StageDescriptor, index: number) => {
         const state = stepState(index, effectiveReached, live);
         return (
-          <li className={`stage-step ${state}`} key={item.key}>
+          <li className={`stage-step ${state}`} key={item.key} aria-current={state === "active" ? "step" : undefined}>
             <span className="stage-step-dot" aria-hidden="true">
               {state === "completed" ? (
                 <CheckIcon size={12} />
@@ -42,6 +48,7 @@ export function StageProgress({ stage, live = false }: StageProgressProps): Reac
               )}
             </span>
             <span className="stage-step-label">{item.label}</span>
+            <span className="sr-only">{STATE_TEXT[state]}</span>
           </li>
         );
       })}

@@ -1,4 +1,5 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, lstatSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 
 import {
@@ -98,6 +99,9 @@ import {
   type ReviewModelInput
 } from "./service/model-workflow-service.js";
 import { CostWorkflowService } from "./service/cost-workflow-service.js";
+import { parseModelGeometry, type ModelGeometry } from "./artifacts/model-geometry.js";
+import { readRegisteredArtifact, type RegisteredFile } from "./artifacts/registered-file.js";
+import { BusinessDeletionService } from "./service/business-deletion-service.js";
 
 export interface RunnerConfig {
   /** Absolute path of the SQLite database file (default `{dataRoot}/state/swpanel.db`). */
@@ -325,6 +329,7 @@ export class Runner {
   private readonly workflow: DrawingWorkflowService;
   private readonly modelWorkflow: ModelWorkflowService;
   private readonly costWorkflow: CostWorkflowService;
+  private readonly businessDeletion: BusinessDeletionService;
   private readonly now: () => Date;
   private readonly sourceFiles = new Map<string, string>();
   private runWorkspace: RunWorkspaceLedger | null = null;
@@ -355,7 +360,8 @@ export class Runner {
     this.ledger = new DrawingFileLedger({ dataRoot });
     this.workflow = new DrawingWorkflowService(this.repository, this.ledger, this.runRepository);
     this.modelWorkflow = new ModelWorkflowService(this.repository, this.runRepository);
-    this.costWorkflow = new CostWorkflowService(this.repository, this.runRepository);
+    this.costWorkflow = new CostWorkflowService(this.repository, this.runRepository, (modelId) => this.getModelGeometry(modelId));
+    this.businessDeletion = new BusinessDeletionService(this.db, this.ledger, () => this.runWorkspace);
   }
 
   open(): void {
@@ -483,6 +489,7 @@ export class Runner {
       });
     }
     this.opened = true;
+    this.businessDeletion.retryCleanup();
   }
 
   /**
@@ -556,9 +563,12 @@ export class Runner {
     return this.repository.getStorageSettings();
   }
 
-  /** Lists drawings only after validating every immutable source file. */
+  /**
+   * Lists drawings from metadata only. Source-file integrity is verified where
+   * a file is actually read (revision detail, file routes), so a list request
+   * never hashes the whole library or fails because of one damaged file.
+   */
   getDrawingList(): readonly import("@swpanel/contracts").DrawingListItemView[] {
-    for (const drawingId of this.repository.listDrawingIds()) this.verifyDrawingLedgerFiles(drawingId);
     return this.repository.getWorkspaceDashboard().recentDrawings;
   }
 
@@ -617,12 +627,70 @@ export class Runner {
    * reviewed exactly once; a rejected Model requires a new Modeling Run.
    */
   reviewModel(input: ReviewModelInput): ModelDetailView {
-    return this.modelWorkflow.reviewModel(input);
+    const reviewed = this.modelWorkflow.reviewModel(input);
+    return { ...reviewed, geometry: this.getModelGeometry(reviewed.model.modelId) };
   }
 
   /** Aggregate read of one Model (head, published artifacts, review history). */
   getModelDetail(modelId: string): ModelDetailView {
-    return this.modelWorkflow.getModelDetail(modelId);
+    return { ...this.modelWorkflow.getModelDetail(modelId), geometry: this.getModelGeometry(modelId) };
+  }
+
+  readModelArtifact(modelId: string, artifactId: string): RegisteredFile {
+    if (this.runWorkspace === null) throw new InvalidArgumentError("Runner workspace is not open");
+    return readRegisteredArtifact(this.runRepository, this.runWorkspace, modelId, artifactId);
+  }
+
+  getDeletionImpact(kind: "drawing" | "model", id: string) {
+    return this.businessDeletion.getImpact(kind, id);
+  }
+
+  deleteBusinessObject(kind: "drawing" | "model", id: string, confirmationToken: string) {
+    return this.businessDeletion.delete(kind, id, confirmationToken);
+  }
+
+  retryDeletionCleanup(): string[] {
+    return this.businessDeletion.retryCleanup();
+  }
+
+  getModelGeometry(modelId: string): ModelGeometry | null {
+    const detail = this.modelWorkflow.getModelDetail(modelId);
+    const validation = detail.model.validationSummary;
+    if (validation === null || validation.rebuildStatus !== "PASSED") return null;
+    for (const artifact of detail.artifacts) {
+      if (artifact.kind !== "BUILD_VALIDATION_LOG") continue;
+      try {
+        const file = this.readModelArtifact(modelId, artifact.artifactId);
+        const log: unknown = JSON.parse(file.content.toString("utf8"));
+        if (typeof log !== "object" || log === null || Array.isArray(log) ||
+          !("rebuildStatus" in log) || log.rebuildStatus !== "PASSED" ||
+          !("solidWorksVersion" in log) || log.solidWorksVersion !== validation.solidWorksVersion) continue;
+        const geometry = parseModelGeometry(log, artifact.artifactId);
+        if (geometry !== null) return geometry;
+      } catch {
+        // Missing, changed or malformed evidence cannot authorize a cost calculation.
+      }
+    }
+    return null;
+  }
+
+  readDrawingSource(drawingId: string, revisionId: string): RegisteredFile {
+    const revision = this.repository.getRevision(revisionId);
+    if (revision === null || revision.drawingId !== drawingId) throw new RunnerError({ code: "NOT_FOUND", message: "Drawing revision was not found" });
+    const source = revision.sourceFile;
+    const absolutePath = this.ledger.toAbsolute(source.relativePath);
+    // The persisted identity fixes the library subtree; refuse every link component.
+    const prefix = `library/drawings/${source.id}/source/`;
+    if (!source.relativePath.startsWith(prefix)) throw new InvalidArgumentError("Source path does not belong to the revision");
+    const components = source.relativePath.split("/");
+    for (let depth = 1; depth <= components.length; depth++) {
+      if (lstatSync(join(this.dataRoot, ...components.slice(0, depth))).isSymbolicLink()) throw new InvalidArgumentError("Source path traverses a symbolic link");
+    }
+    const verification = this.ledger.verifyStoredFile(absolutePath, source.relativePath, source.sizeBytes, source.sha256);
+    if (!verification.ok) throw verification.error;
+    const content = readFileSync(absolutePath);
+    if (content.length !== source.sizeBytes || createHash("sha256").update(content).digest("hex") !== source.sha256) throw new InvalidArgumentError("Source integrity verification failed");
+    return { content, fileName: source.fileName, mimeType: DRAWING_MIME_TYPES[source.format] };
   }
 
   // -------------------------------------------------------------------------
@@ -695,7 +763,8 @@ export class Runner {
       ...base,
       currentRun: this.runRepository.getCurrentRunDetail(),
       queuedRunLabels: this.runRepository.getQueuedRunLabels(),
-      pendingReviews: this.runRepository.listPendingReviewItems()
+      pendingReviews: this.runRepository.listPendingReviewItems(),
+      pendingClarifications: this.runRepository.listPendingClarificationItems()
     };
   }
 
@@ -810,10 +879,11 @@ export class Runner {
   submitClarificationAnswers(input: {
     clarificationRequestId: string;
     answers: readonly ClarificationAnswer[];
-    answeredAt: string;
+    answeredAt?: string;
     answeredBy: string;
   }): ClarificationView {
-    return this.runRepository.submitClarificationAnswers(input);
+    // The service stamps the server clock; a browser-supplied time is ignored.
+    return this.modelWorkflow.submitClarificationAnswers(input);
   }
 
   /**

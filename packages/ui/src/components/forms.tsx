@@ -1,5 +1,5 @@
 import { cx } from "../lib/cx.js";
-import type { ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 
 /**
  * FormField — label + control + hint/error container (`.form-field`).
@@ -25,18 +25,55 @@ export function FormField({
   className,
   children
 }: FormFieldProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const messageId = `${useId()}-message`;
+  const hasMessage = error !== undefined || hint !== undefined;
+  const invalid = error !== undefined;
+
+  // Controls are wrapped by other components (TextInput, Select, ...), so the
+  // association is applied to the rendered control: the one `htmlFor` points
+  // at, otherwise the first form control. Attributes the caller already set
+  // are never overwritten, and everything added here is removed on cleanup.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (root === null) return undefined;
+    const byId = htmlFor !== undefined ? root.querySelector(`[id="${htmlFor}"]`) : null;
+    const control =
+      byId instanceof HTMLElement && byId.matches("input, select, textarea")
+        ? byId
+        : root.querySelector<HTMLElement>("input, select, textarea");
+    if (control === null) return undefined;
+
+    const added: string[] = [];
+    const set = (name: string, value: string): void => {
+      if (control.hasAttribute(name)) return;
+      control.setAttribute(name, value);
+      added.push(name);
+    };
+    if (hasMessage) set("aria-describedby", messageId);
+    if (required) set("aria-required", "true");
+    if (invalid) set("aria-invalid", "true");
+    return () => {
+      for (const name of added) control.removeAttribute(name);
+    };
+  }, [htmlFor, hasMessage, invalid, required, messageId]);
+
   return (
-    <div className={cx("form-field", className)}>
+    <div ref={rootRef} className={cx("form-field", className)}>
       <label className={cx("form-label", required && "form-label-required")} htmlFor={htmlFor}>
         {label}
       </label>
       {children}
       {error !== undefined ? (
-        <span className={cx("form-hint", "form-hint-error")} role="alert">
+        <span id={messageId} className={cx("form-hint", "form-hint-error")} role="alert">
           {error}
         </span>
       ) : (
-        hint !== undefined && <span className="form-hint">{hint}</span>
+        hint !== undefined && (
+          <span id={messageId} className="form-hint">
+            {hint}
+          </span>
+        )
       )}
     </div>
   );

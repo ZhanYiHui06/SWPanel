@@ -374,7 +374,7 @@ describe("Phase 4 P4-2 Invocation Package", () => {
 describe("Phase 4 P4-2 + Phase 5 Prompt Template", () => {
   it("the default run profile pins the controlled template version", () => {
     expect(DEFAULT_RUN_PROFILE.promptTemplateVersion).toBe(PROMPT_TEMPLATE_VERSION);
-    expect(PROMPT_TEMPLATE_VERSION).toBe("2026.08-p5.1");
+    expect(PROMPT_TEMPLATE_VERSION).toBe("2026.10-web.1");
   });
 
   it("renders every section from the frozen snapshot, provenance, workspace and package", () => {

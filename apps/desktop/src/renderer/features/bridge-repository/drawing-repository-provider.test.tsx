@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MockBridgeDrawingRepository } from "./mock-bridge-repository.js";
@@ -120,6 +120,22 @@ describe("useDrawingQuery state machine", () => {
     fireEvent.click(screen.getByText("invalidate"));
     expect(await screen.findByTestId("status")).toHaveTextContent("success");
     expect(screen.getByTestId("data").textContent).toBe("value-2");
+  });
+
+  it("ignores an older response that arrives after invalidate() started a newer request", async () => {
+    const pending = [deferred<string>(), deferred<string>()];
+    let call = 0;
+    const fetcher = () => pending[call++]!.promise;
+    renderWithProvider(<Probe queryKey="k" fetcher={fetcher} />);
+    expect(screen.getByTestId("status").textContent).toBe("loading");
+    fireEvent.click(screen.getByText("invalidate"));
+    await waitFor(() => expect(call).toBe(2));
+    // The post-mutation request answers first, then the pre-mutation one.
+    pending[1]!.resolve("fresh");
+    await waitFor(() => expect(screen.getByTestId("data").textContent).toBe("fresh"));
+    pending[0]!.resolve("stale");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(screen.getByTestId("data").textContent).toBe("fresh");
   });
 
   it("stays idle and never fetches when disabled", () => {

@@ -64,6 +64,8 @@ export interface DeleteRevisionInput {
 export interface DeleteRevisionResult {
   drawing: Drawing;
   deletedRevisionId: string;
+  /** Present only when the source file could not be removed yet (retried later). */
+  cleanupWarnings?: string[];
 }
 
 export interface AddRevisionFactInput {
@@ -115,7 +117,9 @@ export class DrawingWorkflowService {
   constructor(
     private readonly repository: SqliteRepository,
     private readonly ledger: DrawingFileLedger,
-    private readonly runs: RunRepository
+    private readonly runs: RunRepository,
+    /** Server clock (injectable for tests). */
+    private readonly now: () => Date = () => new Date()
   ) {}
 
   // -------------------------------------------------------------------------
@@ -260,9 +264,10 @@ export class DrawingWorkflowService {
    * - afterwards only the OWNED allowlisted ledger file is removed (via the
    *   conservative single-file `deleteOwnedFile` helper — never a broad
    *   recursive deletion);
-   * - an already-missing ledger file is treated as "already gone" (the
-   *   metadata deletion still succeeds); any other ledger failure surfaces as
-   *   a structured error and leaves at most an unreferenced file behind.
+   * - an already-missing ledger file is treated as "already gone"; any other
+   *   ledger failure is NOT surfaced (the DB is committed): the cleanup intent
+   *   is persisted in the shared `business_deletion_cleanup` queue, retried
+   *   later, and a `cleanupWarnings` entry is returned.
    *
    * Whole-Drawing deletion is deliberately NOT implemented in this phase.
    */
@@ -313,13 +318,27 @@ export class DrawingWorkflowService {
       }
       this.repository.deleteRevisionRecords(revision.id, revision.sourceFile.id);
       this.repository.touchDrawing(drawing.id, input.updatedAt);
+      // Durable cleanup intent, committed atomically with the deletion.
+      this.repository.enqueueSourceCleanup(revision.sourceFile.relativePath, this.now().toISOString());
       return {
         drawing: { ...drawing, updatedAt: input.updatedAt },
         deletedRevisionId: revision.id,
         sourceFileRelativePath: revision.sourceFile.relativePath
       };
     });
-    this.deleteOwnedSourceFileIfPresent(deleted.sourceFileRelativePath);
+    // The DB deletion is already committed: a file failure must never turn it
+    // into a client-visible error. The intent stays queued and is retried by
+    // the business-deletion cleanup (on open and on later deletions).
+    try {
+      this.deleteOwnedSourceFileIfPresent(deleted.sourceFileRelativePath);
+      this.repository.dequeueSourceCleanup(deleted.sourceFileRelativePath, this.now().toISOString());
+    } catch {
+      return {
+        drawing: deleted.drawing,
+        deletedRevisionId: deleted.deletedRevisionId,
+        cleanupWarnings: ["原文件清理稍后重试；版本记录已删除。"]
+      };
+    }
     return { drawing: deleted.drawing, deletedRevisionId: deleted.deletedRevisionId };
   }
 
@@ -341,7 +360,8 @@ export class DrawingWorkflowService {
         ...(input.unit === undefined ? {} : { unit: input.unit }),
         source: input.source,
         ...(input.sourceRunId === undefined ? {} : { sourceRunId: input.sourceRunId }),
-        createdAt: input.createdAt,
+        // BE-03: the server clock is authoritative; a client value is ignored.
+        createdAt: this.now().toISOString(),
         ...(input.createdBy === undefined ? {} : { createdBy: input.createdBy })
       };
       this.repository.insertRevisionFact(fact);
@@ -361,7 +381,7 @@ export class DrawingWorkflowService {
         revisionId: input.revisionId,
         content: input.content,
         source: "USER_SUPPLEMENT",
-        createdAt: input.createdAt
+        createdAt: this.now().toISOString()
       };
       this.repository.insertModelingFeedback(feedback);
       return feedback;

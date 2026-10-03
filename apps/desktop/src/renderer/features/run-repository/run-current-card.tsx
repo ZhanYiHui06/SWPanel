@@ -11,6 +11,7 @@ import { Button, InlineNotice } from "@swpanel/ui";
 
 import type { RunListItemView } from "@swpanel/contracts";
 
+import { describeError } from "../error-messages.js";
 import { useRunEventStream } from "./run-repository-provider.js";
 import { useRunIdentity } from "./run-display.js";
 import { RunProgressCard } from "../runs/RunProgressCard.js";
@@ -41,13 +42,13 @@ export function LiveCurrentRunCard({
   return (
     <div>
       {stream.status === "recovering" && (
-        <InlineNotice tone="warning" className="mb-4" title="正在重新连接任务事件流">
+        <InlineNotice tone="warning" className="mb-4" title="连接中断，正在重新连接…" role="status">
           与执行服务的事件连接中断，正在重新同步进度…
         </InlineNotice>
       )}
       {stream.status === "error" && (
-        <InlineNotice tone="error" className="mb-4" title="事件流同步失败">
-          {stream.error?.message ?? "未知错误"}
+        <InlineNotice tone="error" className="mb-4" title="连接中断，未能重新连接" role="alert">
+          {describeError(stream.error).message}
           <div className="mt-4">
             <Button variant="secondary" size="sm" onClick={() => stream.retry()}>
               重试

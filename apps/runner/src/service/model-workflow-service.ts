@@ -1,5 +1,5 @@
-import type { ModelDetailView, ModelListItemView } from "@swpanel/contracts";
-import type { ModelReviewResult } from "@swpanel/domain";
+import type { ClarificationView, ModelDetailView, ModelListItemView } from "@swpanel/contracts";
+import type { ClarificationAnswer, ModelReviewResult } from "@swpanel/domain";
 
 import { RunRepository } from "../db/run-repository.js";
 import { SqliteRepository } from "../db/repository.js";
@@ -27,11 +27,38 @@ export interface ReviewModelInput {
 export class ModelWorkflowService {
   constructor(
     private readonly repository: SqliteRepository,
-    private readonly runs: RunRepository
+    private readonly runs: RunRepository,
+    /** Server clock (injectable for tests). */
+    private readonly now: () => Date = () => new Date()
   ) {}
 
+  /**
+   * Human review. `reviewedAt` is stamped by the SERVER clock (FE-05): the
+   * browser-supplied value is ignored. `reviewerId` is still client-supplied
+   * until an authentication system exists and is NOT a trusted identity.
+   */
   reviewModel(input: ReviewModelInput): ModelDetailView {
-    return this.repository.transaction(() => this.runs.reviewModel(input));
+    const reviewedAt = this.now().toISOString();
+    return this.repository.transaction(() => this.runs.reviewModel({ ...input, reviewedAt }));
+  }
+
+  /**
+   * Clarification answers; `answeredAt` is stamped by the SERVER clock (FE-05).
+   * `answeredBy` is client-supplied and not a trusted identity.
+   */
+  submitClarificationAnswers(input: {
+    clarificationRequestId: string;
+    answers: readonly ClarificationAnswer[];
+    answeredAt?: string;
+    answeredBy: string;
+  }): ClarificationView {
+    const answeredAt = this.now().toISOString();
+    return this.runs.submitClarificationAnswers({
+      clarificationRequestId: input.clarificationRequestId,
+      answers: input.answers.map((answer) => ({ ...answer, answeredAt })),
+      answeredAt,
+      answeredBy: input.answeredBy
+    });
   }
 
   getModelDetail(modelId: string): ModelDetailView {

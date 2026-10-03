@@ -19,7 +19,7 @@ import type { RunWorkspaceLayout } from "../ledger/run-workspace-ledger.js";
  */
 
 /** Version of the current controlled prompt template. */
-export const PROMPT_TEMPLATE_VERSION = "2026.08-p5.1" as const;
+export const PROMPT_TEMPLATE_VERSION = "2026.10-web.1" as const;
 
 /** Hard success artifacts of the Output Contract (development-plan §9.4). */
 export const REQUIRED_MODEL_ARTIFACTS = [
@@ -118,6 +118,8 @@ export function renderPrompt(input: RenderPromptInput): string {
     sections.push(`- ${artifact}`);
   }
   sections.push("The final response must be machine-readable and independently verifiable.");
+  sections.push("The BUILD_VALIDATION_LOG JSON must include top-level solidWorksVersion matching the measured runtime version and rebuildStatus:'PASSED'; record the following geometry in that same JSON document.");
+  sections.push("For cost estimation, the BUILD_VALIDATION_LOG JSON must record mass properties measured from the final saved SolidWorks part after a successful rebuild. Add geometry only when the API measurement succeeded: {schemaVersion:1,source:'solidworks-mass-properties',volume:{value:<positive measured number>,unit:'m3'|'mm3'},boundingBox?:{unit:'mm'|'m',length:<measured>,width:<measured>,height:<measured>}}. Use the same final model as the SLDPRT artifact. Never derive a volume from drawing dimensions, use a fixture, or guess. Omit geometry when measurement is unavailable; the model then cannot be quoted. This measurement does not claim production verification.");
   sections.push("");
 
   sections.push("## Final Turn Contract");

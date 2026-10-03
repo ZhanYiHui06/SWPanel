@@ -2,7 +2,7 @@
 title: Lead Agent Handoff
 status: evolving
 owner: JANGHI
-last_updated: 2026-08-18
+last_updated: 2026-10-03
 ---
 
 # SWPanel 跨 Session 主 Agent 交接文档
@@ -17,6 +17,264 @@ last_updated: 2026-08-18
 - 当前 `.zcode/plans/` 下的 plan 文件 — 批次执行细节。
 
 ---
+
+## 2026-10-03 当前交接：UI / 操作 / 代码实现优化批次（未跑测试）
+
+主 Agent 为 Claude Opus，审计与修复由 Sonnet 子代理分批完成（4 个只读审计 + 6 个修复批次）。改动 127 个文件（约 +4000 / −1500 行），已写回工作区；**没有提交 Git**。
+
+**验证状态（务必先读）**：云端沙箱没有 Linux 版 rollup/esbuild 原生包，vitest 与 vite 无法运行。已通过的只有：全仓 `npm run typecheck`、全仓 `npm run lint`、四个共享包 `tsc` 构建，以及用重建后的 Runner 在临时数据目录上做的 HTTP 冒烟（上传→导入→重复图号→事实→创建 Run→工作台/列表状态→Host/Origin 拒绝→隐藏文件名拒绝→畸形 URL）。**Renderer / Runner / Contracts / Domain / UI 的单元测试、`build:web` 和浏览器实际界面均未运行**，新增与修改的测试断言都是静态编写的，预计会有需要修正的失败用例。下一步第一件事：
+
+```bash
+cd ~/Coding/SWPanel
+npm run build:packages && npm run typecheck && npm test 2>&1 | tee .local-data/claude-transfer/test.log
+npm run build:web
+```
+
+改动前的完整源码备份：`.local-data/claude-transfer/backup-before-optimization-2026-10-03.tgz`（不含 node_modules/.git）。本批次改动文件包：同目录 `swpanel-optimized-changes.tgz`。
+
+### 后端（apps/runner、packages/domain、packages/contracts）
+
+- Web 路径允许的 query/command 收敛为 `web-server.ts` 中的显式清单；`storage.updateSettings`、`secrets.*`、`model.openInSolidWorks` 经 HTTP 返回 403 `OPERATION_NOT_AVAILABLE`。
+- 业务错误返回稳定 code + 固定中文文案（新增 `server/public-errors.ts`）；HTTP 状态码与信封结构未变。图号重复由 `ENTITY_CONFLICT` 细分为 `DRAWING_NUMBER_DUPLICATE`。
+- 新增 Host 头校验（421 `HOST_NOT_ALLOWED`，环境变量 `SWPANEL_ALLOWED_HOSTS` / `SWPANEL_ALLOWED_ORIGINS`）；非回环 HOST 启动时打印无鉴权警告。
+- SSE 连接上限（全局 64 / 每 Run 16）与写入背压；上传并发与暂存总量上限；畸形 URL 返回 400；文件名拒绝控制字符、RTL 覆盖符和以点开头的名称。
+- `secrets.env` 写入改为临时文件 + fsync + rename；数据目录 0700；同一数据目录单实例锁（`server.lock`，仅入口层）。
+- 图纸列表/工作台不再每次请求哈希全部原文件；列表真实返回 `runStatus`、`hasOpenClarification`、`currentApprovedModelId`、新增可选 `hasPendingReview`；工作台返回完整的 `pendingClarifications`。
+- 事实/反馈 `createdAt`、审核 `reviewedAt`、澄清 `answeredAt` 一律以服务端时钟为准。
+- 契约校验增加长度/数量/数值上限、成本项去重、单位白名单。
+- 毛坯规格统一为领域层 `parseStockSpec`（修复 `820mm` 这类紧贴单位被当作 mm 导致体积错 1e9 倍）；`roundCny` 改为十进制半入；数量上限 1,000,000；模型几何测量增加范围校验。
+- `deleteRevision` 文件清理失败不再向客户端报错，进入持久化清理队列。
+
+### 前端数据层（renderer/features）
+
+- 新增 `repository-mode.ts`：统一 bridge / http / mock / unavailable 选择（`vite build --mode web` 的产物默认 http），四个 provider 共用。
+- 跨 provider 缓存失效（审核、Run、成本报告、删除之后相关页面自动刷新）；窗口重新聚焦时节流重取；修复请求序号复位与 `useCostQuery` 卡 loading。
+- SSE 重连指数退避、恢复成功后复位计数，重连期间保留已显示数据；`ClarificationRequired` 事件更新 Run 状态。
+- 非安全上下文（内网 http）下 `crypto.subtle` / `randomUUID` 的回退实现（`sha256.ts`、`random-id.ts`）。
+- 新增 `error-messages.ts` 的 `describeError`，按错误码给出中文说明。
+
+### 界面与交互（packages/ui、renderer/routes、components）
+
+- 新增共享 `Dialog`（Esc、焦点约束与归还、提交中不可关闭、超高滚动），所有手写对话框与通知抽屉已替换/补齐；新增 `Button variant="danger"`。
+- 修复：对话框样式只在部分懒加载页面生效、Toast 语气色不生效、概览“查看详情”在 HashRouter 下跳错、图纸库相对时间使用 fixture 日期、模型详情 Hook 调用顺序。
+- 发起建模防重复提交并在窗口内显示失败；取消运行中的 Run 需二次确认；清除 API Key 需确认。
+- 图纸库状态与筛选使用真实数据（新增“排队中”“待审核”）；工作台展示全部待补充任务与待审核模型。
+- 待审核模型也显示验证结果；失败原因以中文摘要为主、原始 code/message 作为技术详情保留；不再把 UUID 当编号展示。
+- 成本：金额统一两位小数、缺失密度显示“未提供”、总成本按原型高亮、多条固定成本全部展示、参数页逐字段校验、企业成本数据未保存提示。
+- 设置页按运行模式门控，Web 下 Workspace 路径只读；顶栏显示数据来源（已连接服务 / 演示数据 / 服务不可用）；未知路径显示“页面不存在”。
+- 窄窗口：`body` 不再强制 1180px，<1180 / <1100 / <900 三档降级（≥1180 的规则未变）。断点为实现自定，原型未定义，需人工确认观感。
+
+### 未做 / 待决策
+
+- 需要真机确认：PDF 页内预览在 Chrome/Edge 下是否被 `CSP: sandbox` 阻止；900/1100/1280 宽度下的布局；e2e 截图基线（≥1180 应无差异）。
+- 需要产品决策：鉴权与多用户（审核人/回答人仍由前端提供，不可信）；成本“单价先舍入再乘数量”导致明细不闭合；材料费按成品质量还是毛坯质量计价；面包屑英文标题（Run Detail / Model Detail）；界面中英术语统一；“建模完成/需要补充”通知。
+- 工程遗留：Run 终态后服务端不主动关 SSE（前端会把关闭当作断线）；`RunListItemView` 缺图号等字段，任务历史仍逐行取详情（已加分页）；上传仍为 JSON+Base64；HEAD 文件请求仍整文件读取；前端 `DrawingRepository` 没有 `getDashboard()`，工作台待审核项由图纸列表派生；成本参数页的余量编辑不影响服务端计算；Electron 主进程 bridge 未同步本批次契约变化（已不再是目标形态）。
+- 完整审计清单与各批次报告未放入仓库；条目编号（U-xx / UX-xx / FE-xx / BE-xx）仅存在于会话记录中。
+
+
+## 2026-10-01 上一交接：Web 剩余业务功能落地
+
+### 上传故障修复
+
+- 修复 `/api/upload` 用重复分组正则校验 Base64 时，大文件触发 V8 调用栈溢出并返回 HTTP 500 的问题。改为长度检查与解码后 canonical round trip，继续拒绝非法字符、padding 和非零 pad bits。
+- 新增 20 MiB 上限文件上传、导入、下载及 SHA-256 一致性回归，以及非法编码覆盖；Web API 41 项测试通过，Runner 构建与修改文件 ESLint 通过。
+- 本地 API 已加载修复；浏览器实际选择 4 MiB PDF 已进入图号/名称填写步骤，取消测试导入，未创建业务图纸。
+
+按用户“继续实现剩余部分”推进；三个 subagent 均使用 GPT-6.1 Sol / medium。本批次取代下方上一批次的缺口表；旧桌面与旧 Web 记录保留为历史。
+
+- 原图与模型 Artifact 已通过身份绑定的 GET/HEAD 接口提供查看、下载。每次读取检查所属对象、账本路径、符号链接、大小和 SHA-256；不能提交任意服务器路径。Web 模型列表/详情/概览读取真实预览图，缺失时提示；原始 PDF 可页内预览，DWG/DXF 和 SLDPRT 下载后用本机工具打开。Web build 使用独立 `--mode web` CSP，允许同源 PDF object；桌面构建策略保留。
+- 成本页移除产品模式中的 fixture 体积和默认毛坯规格。可信体积来自已登记 BUILD_VALIDATION_LOG 的明确 SolidWorks mass-properties 测量，版本和重建结果须与模型摘要一致；无证据则禁止报价。`productionVerified=false` 表示未完成生产验收，与“存在测量数据”分开。Prompt Template 更新为 `2026.10-web.1`，要求在最终重建后的日志记录版本、重建和真实测量；没有测量时不得猜测。
+- 后台报价替换浏览器提交的体积、价格快照、余量和公式版本；成本捕获时间与报告创建时间保持一致。使用服务端测量与企业当前成本配置，冻结生成时快照。校验单位、密度、数量、毛坯规格及体积，拒绝溢出；自定义字段仍只记录与展示。
+- 企业成本页支持材料、固定成本和自定义字段新增/编辑/确认删除，以及按原方向编辑毫米余量；阻止无效数值、重复名称/标识和双击提交。
+- 图纸库及模型列表提供显式删除：先读取关联数量和正式模型影响，再提交确认 token。事务内重新核对，新增依赖使旧确认失效；活动/待澄清任务阻塞。Drawing 硬删除关联版本/Run/Model/Review/报告/记忆/文件；Model 删除保留原图、版本、Run 与建模经验，但清正式模型指针、审核、报告、产物和悬空身份引用。文件清理意图持久化，故障后启动/定时重试且不把已提交删除变成失败。Run 删除同时清关联报价及反馈链接，确认文案明确级联影响。
+- Web 设置已提供运行状态、服务端 API Key 保存/掩码/清除、用户点击后的真实 `/models` 连接测试，以及启动恢复通知。`secrets.env` 是服务端私有 JSON 明文文件，POSIX 权限 0600；Windows 数据目录须配置私有 ACL。已启动的 worker 更新密钥后需重启，不假报已连接；没有在本机发起模型调用。
+- Windows 服务端配置复用现有真实 Codex/PDFium/SolidWorks/安全取消流程：仅真实能力探测通过才注入 worker。API provider 的地址、密钥环境和可选模型实际传入同一探测/执行子进程；密钥不进命令行。配置依据 [官方配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)。Mac 和缺少密钥/技能/有效探测时保持 UNCONFIGURED。
+
+当前验证：全仓 typecheck、lint、`build:web` 通过；Renderer **29 文件 / 375 测试**；Runner **51 文件通过、1 平台跳过 / 923 测试通过、6 平台跳过**；Contracts **14 文件 / 214 测试**。HTTP/SQLite/产物/删除/成本测试均使用临时数据库，测量日志是明确测试 fixture；没有写用户开发库，没有真实 CAD 验收。重启后的 5173 代理 health/settings 正常，浏览器设置显示 Mac 不支持及真实服务器路径。
+
+**实际剩余**：Windows + SolidWorks 的真实图纸建模、真实澄清、安全取消/恢复和测量报价的端到端验收；DWG/DXF 真实转换；生产部署/多用户认证及权限策略。当前 Web API 默认仅监听回环，是本地开发形态；不是已验收的公网服务。不能将本批次测试日志或 `SERVER_CONFIGURED` 当作真实生产验收。Skill 资产未改，原生 Electron 文件访问仍不使用 Web endpoint。
+
+dev 服务继续运行于 `127.0.0.1:5173` 和 `127.0.0.1:3001`，数据根 `.local-data/web`；后端改动需构建并重启。Git 源码仍未跟踪，无提交、推送或部署。
+
+## 2026-10-01 上一批次：需求核对与 HTTP 业务契约修复
+
+本轮按 `product-scope.md` 的九项 MVP 范围、领域规则及建模/审核/成本工作流逐项核对代码。旧桌面 Phase PASS 不视为 Web 验收；启动成功也不视为真实 CAD 已接通。两个 subagent 按用户要求使用 GPT-6.1 Sol / medium，分别负责需求审计和前端 HTTP adapters，主 Agent 完成服务端与集成复验。
+
+### 本轮落地
+
+- 修正四个 HTTP adapters：图纸凭证来自 `input.file.token`，补齐图纸路由解析；变更返回真实领域对象；Run/Clarification 方法、审核 `reviewerId`、成本方法与冻结输入均对齐现有契约。共享 `HttpTransport` 将命令鉴别字段写入 `payload.command`，保留结构化业务错误。
+- Web API 复用严格 `validateIpcRequestEnvelope` 校验命令/查询/字段；上传只能使用服务端生成的凭证，客户端不得直接提交文件路径或伪造源文件元数据。
+- 上传允许 PDF/DWG/DXF，拒绝路径文件名、无效 Base64、超限请求；默认文件上限 20 MiB，普通 JSON 请求上限 1 MiB。独立私有临时目录、五分钟凭证过期、成功单次消费及过期/停机清理均已实现。业务失败允许修正后重试，清理故障不改变已提交成功结果。
+- 导入/新增版本的重试幂等键绑定上传凭证与语义内容；事实/反馈的幂等键绑定表单 intent。服务端在同一进程内合并并发请求、缓存成功结果并拒绝同键不同命令；缓存不跨进程重启持久化。
+- SSE 支持 `fromSequence` 与 `Last-Event-ID`，逐事件 ID、真实服务实例 UUID、实时提交、心跳与清理；前端验证事件、过滤重复并在缺口/断线时交给现有 provider 重新读取与订阅。`fromSequence=0` 对应从序号 1 开始的完整历史。
+- 默认 Web 服务建模 worker 明确为 `UNCONFIGURED`；创建的 Run 在 PREPARING 以 `AGENT_RUNTIME_UNAVAILABLE` 失败并保存历史，避免原默认 Fake Executor 将上传图纸生成合成模型。只有测试专用的服务端配置显式注入 synthetic executor；没有开启真实 CAD 或引入浏览器场景选择。
+- 修复成本报告删除后重新生成的编号碰撞：从仍存在报告的最大编号递增，报告身份由 UUID 独立生成，旧报告链接不会指向重新创建的报告。
+- 模型事件校验从 `@swpanel/contracts/product-events` 浏览器安全入口导入，避免 contracts 根导出中的 Node `stream` 进入前端 bundle。
+- 后端处理端口占用为异步启动失败，并在 SIGINT/SIGTERM 时关闭 SSE、停止 Runner、清理上传；HTTP 连接关闭有两秒收尾期限。CORS 只允许明确开发来源及服务自身来源。
+
+### 需求与代码核对
+
+| MVP 范围 | 当前可复用/已接通部分 | 尚未完成的 Web 能力 |
+|---|---|---|
+| 1. 图纸管理 | HTTP 上传、持久化、版本新增/查询、当前版本切换；原始文件复制到不可变账本 | Drawing 整体删除、原始文件浏览器预览/下载 |
+| 2. Revision Memory | 事实/反馈写入与查询、表单重试幂等、新版本独立记忆 | 完整长期维护体验仍需持续验收 |
+| 3. 自动建模任务 | 创建时冻结输入、串行队列、取消/删除/查询与 SSE 契约可复用 | 真实 Agent/CAD worker；当前默认只记录未配置失败 |
+| 4. Clarification | HTTP 结构化回答写入 Facts；旧终止 Run 不恢复、不自动新建 Run | 真实 Agent 产生问题的外部链 |
+| 5. Agent 建模管理 | Runner 的 preflight、编排、Artifact 检查与归档逻辑已有 | Web 服务端运行配置、真实 worker 与 macOS/Windows 执行策略 |
+| 6. 模型审核 | HTTP Approved/Rejected、拒绝反馈、当前正式模型指针已集成测试 | 真实产物预览/下载、Web 打开模型方案、Model 删除 |
+| 7. 内部成本报告 | HTTP 冻结输入、确定性计算、审核资格校验、历史快照、删除及重建 | `CostParamsPage.tsx` 仍引用 fixture 的成品体积/毛坯规格；需从真实模型取参数，不能宣称真实几何测算完成 |
+| 8. 企业成本数据 | HTTP 获取/保存成本快照、编辑既有材料/余量/固定成本 | UI 新增材料/固定成本仍禁用；可扩展字段维护未完整落地 |
+| 9. 删除能力 | 非当前且无依赖 Revision、终止 Run、成本报告的现有保护逻辑可复用 | Drawing、Model 整体删除与关联影响提示未完整实现 |
+
+跨模块未完成项：Web API 密钥与 Agent 设置、启动恢复通知的 Web 接入、登录/部署边界；Electron 设置不能当作这些功能已经迁移。下一开发批次优先处理真实模型参数与产物读取，再落实 worker 和 Web 设置方案。
+
+### 本轮验证
+
+- 全仓 `npm run typecheck`、`npm run lint` 与 `npm run build:web` 通过。
+- Renderer：26 文件 / 362 测试通过，包括 18 个 HTTP transport/adapter 用例和 4 个真实 HTTP + SQLite adapter 集成用例。
+- Runner 全量：42 个测试文件通过、1 个文件按平台跳过；896 个测试通过、6 个按平台跳过（共 902 个）。
+- WebServer：29 个用例通过，覆盖上传→导入→重启持久化、版本/记忆、凭证与重试、校验错误、SSE backlog/live、未配置执行失败、测试模型审核与确定性成本报告。
+- 真实模型审核/澄清/成本测试使用临时数据库与显式合成执行器，`productionVerified=false`；未作为真实 SolidWorks 验收。测试没有写入当前用户开发数据库。
+- 浏览器复核真实 HTTP 图纸库与企业成本数据页面，未见控制台 error；重启后的 5173 代理健康与 dashboard 查询成功。dev 服务继续运行于 5173/3001，数据目录仍为 `.local-data/web`。
+- Git 项目源码仍为未跟踪文件；没有提交、推送或部署。
+
+## 2026-10-01 前一批次：Web dev 服务启动验证
+
+已接手上一位 Agent 的源码修改；以下为本轮在 macOS 上实际复验的结果，覆盖下方旧记录中关于开发入口和 HTTP 服务缺失的描述。
+
+- 环境：Node 24.21.0 / npm 11.19.0；`npm run build:packages` 构建四个共享/服务包通过。
+- `npm run dev` 启动 Vite，监听 `127.0.0.1:5173`；`npm run dev:server` 启动独立 Runner HTTP 服务，默认监听 `127.0.0.1:3001`。后端运行的是 `dist`，修改后端源码后需重新构建并重启。
+- 本轮补齐 Vite 的 `/api` 开发代理（目标 `http://127.0.0.1:3001`），使使用前端同源地址的 HTTP adapters 可访问真实后端，包括 SSE 路径。
+- 本轮后端启动命令：`SWPANEL_DATA_ROOT="$PWD/.local-data/web" npm run dev:server`。数据位于仓库已忽略的 `.local-data/web`；未迁移其他目录的旧业务数据。不指定该变量时，入口默认使用 `~/.swpanel-data`。
+- 浏览器 `http://127.0.0.1:5173/` 使用 mock；`http://127.0.0.1:5173/?mode=http` 使用 HTTP adapters。已验证真实模式的工作台和图纸库正常显示空数据库状态。
+- 3001 直连及 5173 代理的 `/api/health`、`workspace.getDashboard` 查询均返回 HTTP 200 与成功 JSON。
+- 补齐根 `npm run test:renderer`：24 个测试文件、340 个测试通过；Runner `web-server.test.ts`：1 个文件、3 个测试通过；`npm run build:renderer --workspace @swpanel/desktop` 通过。
+- 本轮未复验全部 Runner 测试、上传到创建图纸的完整业务链、SSE 重连、真实 CAD 或生产部署；以上启动验证不能视为完整 Web 平台验收。
+- 当前 Git 工作树中项目源码均显示为未跟踪文件；本轮没有提交或推送。
+
+## 2026-09-18 历史交接：macOS 开发 / Web-only
+
+**下一位开发者或 Agent 必须先读本节，再查阅下方历史记录。** 本节覆盖旧记录中的桌面产品方向、默认下一步和开发入口；其他业务不变量与安全要求仍保留。后续更新继续维护本文件，不另建并行进度 handoff。
+
+### A. 用户决策与本轮边界
+
+- 后续仅做通用 Web 平台，不做独立 Electron 客户端；迁移到 macOS 继续开发。
+- 本轮仅做项目梳理、README 导航与本交接文档，**未进行 Web 架构迁移**。
+- 不移动/重命名源码目录，不删除 Electron、Windows 脚本、测试或 Skill，不修改依赖、lockfile 和业务行为。
+- 未提交或推送 Git，未安装依赖，未运行应用、测试、构建、真实 CAD 或发布流程。
+- 梳理基线：分支 `main`，HEAD `d563cf6`（`chore: commit full SWPanel source tree`）；开始时工作树干净。本节不是该提交的新验收报告。
+
+### B. 现在有什么，尚缺什么
+
+| 区域 | 当前事实 | 后续接手方式 |
+|---|---|---|
+| `apps/desktop/src/renderer` | React/Vite 前端、路由、repository adapters、fixtures | 保留并优先复用；目录名不代表必须用 Electron 启动 |
+| `apps/desktop/src/main`、`src/preload` | Electron 宿主、`window.swpanel`、文件选择、密钥、Runner 生命周期与 IPC | 作为旧实现参考；浏览器或服务端能力要另行替换 |
+| `apps/runner` | SQLite、文件账本、业务服务、任务编排、Agent/CAD 探针及 Named Pipe | 复用业务逻辑；没有现成的独立 HTTP 服务启动入口 |
+| `packages/domain`、`packages/contracts`、`packages/ui` | 领域计算、业务契约、共享视觉组件 | 优先保留，避免重写已实现业务语义 |
+| `.design` | 已确认高保真 HTML/CSS 原型 | 仍是视觉依据，非生产应用 |
+| `skills/solidworks-autobuild` | CAD 工具与技能，包含 Windows COM 和 Python 依赖 | 保留，不作为 Mac 浏览器开发前置 |
+| `scripts`、`src`、`e2e` | 工程脚本及其测试、浏览器和 Electron E2E | 区分 Web 验证与旧桌面验证，不一并删除 |
+
+**重要限制：浏览器能打开，不等于 Web 平台完成。**
+
+- `drawing-repository-provider.tsx` 当前按运行环境选择 adapter：有 `window.swpanel` 使用 bridge；开发模式无 bridge 使用 mock；生产模式无 bridge 使用 unavailable adapter。位置：`apps/desktop/src/renderer/features/bridge-repository/`。
+- `apps/desktop/vite.config.ts` 提供 `127.0.0.1:5173` 开发入口，但仍引用 Electron 安全模块中的 CSP。前端尚未完全解耦。
+- RunnerHost 当前在 Electron Main 进程内管理 Runner，见 `apps/desktop/src/main/runner-host/runner-host.ts`。旧 ADR 所述“独立 Runner”不能直接当作当前部署事实。
+- 没有已接通的通用 Web API、Web 登录/权限与部署闭环。静态托管 renderer 构建产物并不能补齐这些能力。
+- 成本计算器可以复用，但 `CostParamsPage.tsx` 的成品体积仍是 fixture 输入，不是已打通的真实几何结果。
+
+### C. macOS 迁移清单
+
+**迁移源码，不搬运 Windows 运行环境。** 优先使用 Git clone；如尚未提交本轮文档，需要自行携带这些改动，普通 clone 不会带走未提交文件。提交/推送需用户授权，不由本轮自动执行。
+
+保留：源码、`package-lock.json`、配置、文档、`.design`、合法测试 fixtures 和截图基线。不要复制 Windows `node_modules`、`dist`、`out`、安装器、测试输出、`.scratch`、运行数据库、客户图纸或密钥。真实业务数据迁移不是本轮范围；有需要时另行规划备份、导出和安全迁移。
+
+在 Mac 安装 Node.js 24.x 与 npm 11.x（仓库 engines 下限分别为 24/11），进入实际仓库目录，例如：
+
+```bash
+cd "$HOME/coding/SWPanel"
+git status --short
+git log -1 --oneline
+node --version
+npm --version
+
+ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci
+npm run build --workspace @swpanel/domain
+npm run build --workspace @swpanel/contracts
+npm run dev:renderer --workspace @swpanel/desktop
+```
+
+打开 `http://127.0.0.1:5173/`。先构建 domain/contracts，因为共享包的运行时导出依赖 `dist`。`ELECTRON_SKIP_BINARY_DOWNLOAD=1` 仅跳过 Electron 二进制下载，不会移除 Electron 依赖，也不代表已去 Electron 化。当前浏览器 mock 开发无需配置真实 API key、Codex 或 SolidWorks。
+
+**以上为基于源码整理的步骤，未在 macOS 实机验证。** 若 `npm ci` 失败，先保留错误信息并检查 Node/npm 版本、网络和平台依赖，不要为了安装成功直接重写锁文件。
+
+### D. 验证顺序与命令边界
+
+在完成上面的共享包构建后，可逐步执行并分别记录结果：
+
+```bash
+# 现有 typecheck 是全仓检查，仍覆盖遗留 Electron 类型。
+npm run typecheck
+npm run lint
+npm run test --workspace @swpanel/domain
+npm run test --workspace @swpanel/contracts
+npm run test --workspace @swpanel/ui
+npm run build:renderer --workspace @swpanel/desktop
+npm run check:fixtures
+
+# 进一步检查遗留业务/适配器；失败或平台跳过需单独记录。
+npm run test --workspace @swpanel/runner
+npm run test --workspace @swpanel/desktop
+
+# 仅运行浏览器行为测试，不执行 Electron 项目，暂不验收截图。
+npx playwright install chromium
+npx playwright test --config=playwright.config.ts --project=chromium --grep-invert 'screenshot'
+```
+
+- Playwright 配置会启动 renderer 开发服务。浏览器 E2E 验证的是开发模式行为，不能证明真实 Web backend 已工作。
+- 现有 `phase1.browser.spec.ts-snapshots` 为 Windows 基线；Mac 字体栅格化等可能不同。视觉确认后再建立 Mac 基线，不批量覆盖旧基线来“修绿”。上述过滤会跳过标题包含 `screenshot` 的测试，**不算完成视觉验收**。
+- Runner live-pipe 测试在非 Windows 会跳过；跳过不代表跨平台 IPC 验证通过。
+- 根 `npm run dev` 启动 Electron；根 `npm run build`/`npm run check` 包含桌面构建；根 `npm run test:e2e` 先运行 production Electron E2E。它们不是纯 Web 验收入口。
+- `package:win`、`make:win`、Windows 签名/安装验收已不是新方向的默认任务。不运行 SolidWorks HIL，不把整份 Python requirements 作为 Mac 初始化步骤。
+
+### E. 平台限制与待确认问题
+
+1. **Windows IPC 与 CAD**：`apps/runner/src/ipc/` 使用 Windows Named Pipe；`apps/runner/src/preflight/solidworks-live-probe.ts` 非 Windows 返回 unsupported-platform，并依赖 PowerShell/Python COM。不能在 Mac 照搬旧全链路。
+2. **Python 依赖**：`skills/solidworks-autobuild/requirements.txt` 含 pywin32/comtypes；PDF rasterizer 默认使用 `python`，Mac 常见命令是 `python3`。未来接真实输入转换时再单独梳理依赖与可执行路径。
+3. **Skill 历史不一致**：旧记录要求 `solidworks-build-part-from-drawing`，当前 `live-codex-config.ts` 默认是 `solidworks-autobuild`。旧 digest/HIL 记录不能证明新 Skill 已通过验证；不得自动恢复旧路径或宣称当前 Skill 已获同样验收。
+4. **成本 mock 待复验**：`features/cost-repository/cost-repository-provider.tsx` 使用 `process` 判断开发模式，不同于其他 provider 的 `import.meta.env.DEV`；普通浏览器可能进入 unavailable 分支。这是静态检查发现，尚未运行确认或修复。
+5. **密钥安全文档偏差**：旧状态文档声称 production fallback refuse，但 `main.ts` 创建 SecretStore 未传 fallbackMode，`secrets/secret-store.ts` 默认值为 `obfuscate`。本轮未修复；Web 平台需另行设计服务端密钥管理，不能照搬或声称现有实现已满足 Web 安全要求。
+6. **仓库卫生**：Git 已跟踪 18 个 `.pyc`，位于 Runner adaptation 与 CAD Skill 的 `__pycache__`。它们不是 Mac 必要资产。本轮不删除既有文件；后续确认后再移除跟踪并补 Python cache/venv 忽略规则，仅加 ignore 不能移除已跟踪文件。
+7. **不要搬密钥与私有数据**：旧 `secrets.enc` 位于 Electron userData，不能当作跨平台可迁移凭据。仓库已有 env、数据库、artifact 等忽略规则，但忽略规则不替代安全检查。本轮未完成 secret 审计。
+8. **历史外部文件不可假设存在**：旧 Windows 用户目录、外部 Skill 路径、`.scratch` 日志和 `.zcode/plans/` 不属于可靠的 clone 交接材料。以当前仓库文件为准，不按历史绝对路径操作。
+
+### F. 下一阶段建议（本轮未实施）
+
+先在 Mac 复现浏览器预览并记录实际验证结果，再制定 Web 迁移方案供用户确认。推荐拆分顺序：
+
+1. 清点每个 repository adapter 的 bridge 调用，以及上传/下载、预览、事件订阅、设置、密钥与任务生命周期的宿主依赖。
+2. 明确 Web frontend、API 服务和任务 worker 的边界；是否继续 SQLite、如何部署及是否多用户需另行决策，不在文档整理时指定框架或云平台。
+3. 用最小真实业务链（如图纸列表与上传）接通 Web transport，再扩展 Run 事件、模型审核和成本报告；保留 domain/contracts 的业务规则。
+4. 明确 CAD 执行策略。**Web-only 不等于 CAD 必须在 macOS 原生运行**；若保留 SolidWorks，可评估隔离的 Windows worker，但尚未决定或实现。不重新引入独立 Electron 客户端作为必需入口。
+5. Web 替代能力和测试到位后，再移除 Electron 依赖、旧宿主和打包链，必要时重命名 `apps/desktop`；不可先删后补。
+6. 建立独立 Web dev/build/test 脚本、macOS/CI 验证与部署说明，并同步更新 architecture、development-plan 和相关 ADR。
+
+继续保留的规则：`.design` 视觉语言、结构化产品事件、确定性成本计算、真实能力与 mock 明确分开；公开仓库不提交商业敏感数据，不擅自更改 Skill、发布或提交/推送。
+
+### G. 本轮验证与历史证据
+
+本轮执行了只读源码/配置/文档梳理；文档变更完成后仅检查 diff 与文档引用，不运行应用或业务测试。**macOS 实机、Web 后端、真实 CAD、本轮构建与测试均未验证。**
+
+下方 2026-08-18 的 2,230 单元/集成测试、20 production Electron E2E、59 browser + Electron smoke 及 Phase PASS 是历史文档记录，不是本轮复测结果。历史 Phase 5 真实 CAD HIL 未闭环；旧 Windows 打包记录不能证明通用 Web 平台可交付。
+
+**本轮变更记录（2026-09-18）**：README 增加项目导航、Web-only 定位与 Mac 快速入口；本文件增加当前交接，保留全部历史进度。没有删除或迁移源码，没有新增第二份长期 handoff。
+
+---
+
+## 以下为历史交接记录（截至 2026-08-18）
+
+历史章节中的“当前”“下一步”“不进入 Phase”等表述只适用于其记录时点；桌面交付方向与当前计划以顶部 2026-09-18 交接为准。
 
 ## 1. 文档用途、更新与维护规则
 

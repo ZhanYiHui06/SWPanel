@@ -26,6 +26,9 @@ import {
   type ReactNode
 } from "react";
 
+import { HttpTransport } from "../http-transport.js";
+import { resolveRepositoryMode } from "../repository-mode.js";
+
 import type { ToastData, ToastTone } from "@swpanel/ui";
 import type {
   NotificationCategory,
@@ -200,10 +203,19 @@ export function NotificationProvider({
     recoveryCheckedRef.current = true;
     try {
       const recovery = window.swpanel?.system?.getRecoveryStatus;
-      if (typeof recovery !== "function") return;
-      recovery()
+      let status: Promise<{ readonly ok: boolean; readonly data?: RecoveryStatusSummary | null }> | null = null;
+      if (typeof recovery === "function") {
+        status = recovery();
+      } else if (resolveRepositoryMode() === "http") {
+        // system.getRecoveryStatus is a web *command* (not a query) on the server allowlist.
+        status = new HttpTransport({}, class extends Error { constructor(_code: string, message: string) { super(message); } })
+          .command<RecoveryStatusSummary | null>("system.getRecoveryStatus", {})
+          .then((data) => ({ ok: true as const, data }));
+      }
+      if (status === null) return;
+      status
         .then((result) => {
-          if (!result.ok || result.data === null) return;
+          if (!result.ok || result.data === null || result.data === undefined) return;
           const input = buildRecoveryNotification(result.data);
           if (input !== null) addNotification(input);
         })

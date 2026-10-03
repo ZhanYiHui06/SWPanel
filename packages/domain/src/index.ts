@@ -149,6 +149,8 @@ export {
   COST_BASES,
   COST_DATA_KINDS,
   COST_DATA_SEMANTICS,
+  COST_DENSITY_UNITS,
+  COST_PRICE_UNITS,
   type AllowanceDefinition,
   type AllowanceValue,
   type CostBasis,
@@ -176,8 +178,11 @@ export {
 
 export {
   calculateCostEstimate,
+  MAX_COST_QUANTITY,
+  parseStockSpec,
   roundCny
 } from "./cost/calculator.js";
+export type { ParsedStockSpec, StockSpecUnit } from "./cost/calculator.js";
 
 export {
   canCreateCostEstimateReport,

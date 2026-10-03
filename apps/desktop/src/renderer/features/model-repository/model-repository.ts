@@ -21,6 +21,7 @@
 
 import type { ModelDetailView } from "@swpanel/contracts";
 import type { MockRepository } from "../mock-repository/mock-repository.js";
+import type { BusinessDeletionCapability } from "../deletion/BusinessDeletionDialog.js";
 
 /** Structured repository error carrying the stable bridge/runner error code. */
 export class ModelRepositoryError extends Error {
@@ -57,7 +58,11 @@ export interface ReviewModelInput {
   /** Required when `result` is REJECTED (written into the revision feedback). */
   readonly comment?: string;
   readonly reviewerId: string;
-  readonly reviewedAt: string;
+  /**
+   * Ignored by the Web server (its clock stamps the review); only the legacy
+   * bridge / mock adapters still need an instant, and generate one if absent.
+   */
+  readonly reviewedAt?: string;
 }
 
 /**
@@ -65,7 +70,7 @@ export interface ReviewModelInput {
  * `BridgeModelRepository` (product), `MockModelRepository` (explicit dev/test
  * adapter), `UnavailableModelRepository` (error state).
  */
-export interface ModelRepository {
+export interface ModelRepository extends BusinessDeletionCapability {
   /** Which runtime the adapter represents (documented separation). */
   readonly mode: "bridge" | "mock" | "unavailable";
   /** The Phase 1 MockRepository backing this adapter, or null. */
@@ -73,6 +78,9 @@ export interface ModelRepository {
 
   /** Aggregated Model detail: model facts, artifacts and review records. */
   getModelDetail(modelId: string): Promise<ModelDetailView>;
+
+  /** Browser-safe artifact endpoint; absent when file access is unavailable. */
+  artifactUrl?(modelId: string, artifactId: string, download?: boolean): string;
 
   /**
    * Applies the APPROVE / REJECT decision for a PENDING_REVIEW model and

@@ -57,7 +57,7 @@ export function cancelOutcomeNotice(
         title: `Run ${runLabel} 取消未完成`,
         text:
           outcome.failureCode === "CANCEL_CLEANUP_PENDING"
-            ? "清理任务尚未完成（CANCEL_CLEANUP_PENDING），请稍后重试取消。"
+            ? "清理尚未完成，请稍后重试取消。"
             : "取消未完成，请稍后重试。"
       };
     case "ALREADY_TERMINAL":

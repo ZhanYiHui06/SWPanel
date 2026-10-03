@@ -20,6 +20,11 @@ describe("Button", () => {
     expect(html).toContain("type=\"button\"");
   });
 
+  it("renders the danger variant", () => {
+    const html = render(<Button variant="danger">确认永久删除</Button>);
+    expect(html).toContain('class="btn btn-danger"');
+  });
+
   it("defaults to the secondary variant and medium size", () => {
     const html = render(<Button>打开</Button>);
     expect(html).toContain('class="btn btn-secondary"');

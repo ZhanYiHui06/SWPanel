@@ -38,6 +38,7 @@ import type {
 import type { SwpanelBridgeApi } from "../../../main/bridge/bridge-contract.js";
 import type { MockRepository } from "../mock-repository/mock-repository.js";
 import type { DrawingStatusPresentation } from "../drawing-status.js";
+import type { BusinessDeletionCapability } from "../deletion/BusinessDeletionDialog.js";
 
 /**
  * Structured repository error. `code` mirrors the stable bridge error codes so
@@ -158,7 +159,7 @@ export interface DeleteRevisionResult {
  * Implementations: BridgeDrawingRepository (product), MockBridgeDrawingRepository
  * (explicit dev/test adapter), UnavailableDrawingRepository (error state).
  */
-export interface DrawingRepository {
+export interface DrawingRepository extends BusinessDeletionCapability {
   /** Which runtime the adapter represents (documented separation). */
   readonly mode: "bridge" | "mock" | "unavailable";
   /**
@@ -167,6 +168,9 @@ export interface DrawingRepository {
    * this; product pages must treat null as "not available in this runtime".
    */
   readonly mock: MockRepository | null;
+
+  /** Browser-safe original file endpoint, when supported by this adapter. */
+  sourceFileUrl?(drawingId: string, revisionId: string, download?: boolean): string;
 
   // ── Reads (all bridge-backed in the product runtime) ───────────────────
   listDrawings(): Promise<readonly DrawingListItemView[]>;

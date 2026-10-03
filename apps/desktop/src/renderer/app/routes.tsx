@@ -1,4 +1,4 @@
-import { createHashRouter, Navigate, type RouteObject } from "react-router-dom";
+import { createHashRouter, type RouteObject } from "react-router-dom";
 
 import { AppShell } from "../components/AppShell.js";
 import { RoutePlaceholder } from "../routes/RoutePlaceholder.js";
@@ -121,7 +121,7 @@ export function createAppRouter(isDevelopment: boolean = import.meta.env.DEV) {
   children.push({
     id: "not-found",
     path: "*",
-    element: <Navigate to="/" replace />
+    ...lazyProductPage(async () => import("../routes/NotFoundPage.js"))
   });
 
   return createHashRouter([

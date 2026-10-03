@@ -7,7 +7,9 @@ import {
   Card,
   DataTable,
   EmptyState,
+  FormField,
   InlineNotice,
+  TextInput,
   PropertyList,
   SearchInput,
   Select,
@@ -60,6 +62,8 @@ describe("InlineNotice", () => {
 
   it("omits the icon when explicitly disabled", () => {
     const html = render(<InlineNotice icon={null}>说明</InlineNotice>);
+    expect(html).not.toContain("role=");
+    expect(render(<InlineNotice tone="error" role="alert">失败</InlineNotice>)).toContain('role="alert"');
     expect(html).not.toContain("inline-notice-icon");
   });
 });
@@ -147,6 +151,24 @@ describe("DataTable", () => {
     expect(html).toContain("<th");
     expect(html).toContain("PDJF480.01.17C-4");
     expect(html).toContain("col-mono");
+  });
+
+  it("right-aligns numeric and action columns including their headers", () => {
+    const html = render(
+      <DataTable
+        label="成本"
+        columns={[
+          { header: "名称", key: "name" },
+          { header: "金额", key: "amount", cellClass: "numeric" },
+          { header: "操作", key: "ops", cellClass: "actions" }
+        ]}
+        keyColumn="name"
+        rows={[{ name: "A", amount: "¥1", ops: "查看" }]}
+      />
+    );
+    expect(html).toContain("col-numeric");
+    expect(html).toContain("col-actions");
+    expect(html.match(/<th[^>]*class="col-right"/g)?.length).toBe(2);
   });
 
   it("activates interactive rows with mouse, Enter and Space", async () => {
@@ -280,5 +302,28 @@ describe("Tabs", () => {
     await user.keyboard(" ");
     expect(tabs[1]?.getAttribute("aria-selected")).toBe("true");
     expect(onChange).toHaveBeenLastCalledWith("second");
+  });
+});
+
+describe("FormField", () => {
+  it("links hint and error text to the control and marks required/invalid", () => {
+    const { rerender } = renderDom(
+      <FormField label="图号" htmlFor="f-number" required hint="例如 A-1">
+        <TextInput inputProps={{ id: "f-number" }} />
+      </FormField>
+    );
+    const input = screen.getByLabelText("图号");
+    const hint = screen.getByText("例如 A-1");
+    expect(input.getAttribute("aria-describedby")).toBe(hint.id);
+    expect(input.getAttribute("aria-required")).toBe("true");
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+
+    rerender(
+      <FormField label="图号" htmlFor="f-number" required error="不能为空">
+        <TextInput inputProps={{ id: "f-number" }} />
+      </FormField>
+    );
+    expect(input.getAttribute("aria-describedby")).toBe(screen.getByText("不能为空").id);
+    expect(input.getAttribute("aria-invalid")).toBe("true");
   });
 });

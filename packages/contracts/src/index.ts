@@ -9,6 +9,7 @@ export {
 } from "./types.js";
 
 export type {
+  DeletionImpact,
   ClarificationView,
   CostReportDetailView,
   CostReportListItemView,

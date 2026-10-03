@@ -1,19 +1,18 @@
 import type { CostBasis, RevisionFactSource, StockType } from "@swpanel/domain";
 
+import { formatRelativeTime } from "./format.js";
+
 /**
  * Presentation helpers shared by the Phase 1 cost / memory pages. All labels
  * match the confirmed `.design` prototype copy and the UI content fixtures.
  */
 
-/** Formats a cost in the prototype's `¥3,280` style (no decimals). */
-export function formatCny(value: number): string {
-  return `¥${Math.round(value).toLocaleString("zh-CN")}`;
-}
-
-/** Formats a volume in cubic meters, e.g. `0.031 m³`. */
-export function formatVolumeCubicMeters(value: number): string {
-  return `${value.toFixed(3)} m³`;
-}
+/**
+ * Money / volume formatting lives in `cost-format.ts` (two-decimal CNY that
+ * matches the domain's fen rounding, adaptive volume units). Re-exported under
+ * the legacy names so existing imports keep working.
+ */
+export { formatCny, formatVolumeM3 as formatVolumeCubicMeters } from "./cost-format.js";
 
 export function stockTypeLabel(stockType: StockType): string {
   return stockType === "CYLINDER" ? "圆柱料" : "矩形料";
@@ -42,16 +41,11 @@ export function factSourceLabel(source: RevisionFactSource): string {
   }
 }
 
-/** Relative date in the prototype's `今天 23:21` / `昨天 19:06` style. */
+/**
+ * Relative date (`今天 23:21` / `昨天 19:06` / `8月10日 22:31`, with the year
+ * when it differs from `now`). Delegates to `formatRelativeTime` so every page
+ * shares one date format.
+ */
 export function formatSmartDate(iso: string, now: Date = new Date()): string {
-  const date = new Date(iso);
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfTarget = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const dayDifference = Math.round(
-    (startOfToday.getTime() - startOfTarget.getTime()) / 86_400_000
-  );
-  const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-  if (dayDifference === 0) return `今天 ${time}`;
-  if (dayDifference === 1) return `昨天 ${time}`;
-  return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${time}`;
+  return formatRelativeTime(iso, now);
 }

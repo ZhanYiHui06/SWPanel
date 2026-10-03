@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastContainer } from "@swpanel/ui";
 
 import { MockRepository } from "../features/mock-repository/mock-repository.js";
@@ -170,10 +170,10 @@ describe("Drawing Workspace · 成本测算", () => {
     expect(screen.getByText("Q01")).toBeInTheDocument();
     // Canonical synthetic totals from the deterministic fixture calculator
     // (Q03 = quantity 10, Q02 = quantity 1, Q01 = quantity 5).
-    expect(screen.getByText("¥18,734")).toBeInTheDocument();
+    expect(screen.getByText("¥18,734.20")).toBeInTheDocument();
     // Q02 has quantity 1, so per-piece and total both render as ¥1,945.
-    expect(screen.getAllByText("¥1,945")).toHaveLength(2);
-    expect(screen.getByText("¥9,407")).toBeInTheDocument();
+    expect(screen.getAllByText("¥1,945.42")).toHaveLength(2);
+    expect(screen.getByText("¥9,407.10")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "查看详情" })).toHaveLength(3);
     expect(screen.getByText(/不构成最终对客报价/)).toBeInTheDocument();
   });
@@ -229,9 +229,9 @@ describe("成本测算报告详情", () => {
     expect(screen.getByText("PDJF480.01.17C-4")).toBeInTheDocument();
     expect(screen.getByText("Ø320 × 820 mm")).toBeInTheDocument();
     // Q03 canonical synthetic result (quantity 10): per-piece ¥1,873 / total ¥18,734.
-    expect(screen.getByText("¥1,873")).toBeInTheDocument();
+    expect(screen.getByText("¥1,873.42")).toBeInTheDocument();
     expect(screen.getByText("总估算成本（10 件）")).toBeInTheDocument();
-    expect(screen.getByText("¥18,734")).toBeInTheDocument();
+    expect(screen.getByText("¥18,734.20")).toBeInTheDocument();
     expect(screen.getByText(/不构成最终对客报价/)).toBeInTheDocument();
   });
 
@@ -375,6 +375,14 @@ describe("成本数据", () => {
 });
 
 describe("设置", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const data = path.endsWith("/runtime") ? { platform: "darwin", modelingConfigured: false, solidWorksVersion: null, skillName: null, baseUrl: "https://api.openai.com/v1", model: null, reason: "建模执行器未配置" } : path.endsWith("test-connection") ? { connected: true } : { hasApiKey: false, maskedApiKey: null };
+      return Promise.resolve(new Response(JSON.stringify({ ok: true, data }), { status: 200 }));
+    }));
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
   it("renders the confirmed settings groups", () => {
     const repository = MockRepository.create("run-running");
     renderRoute(repository, "/settings", <SettingsPage now={NOW} />);
@@ -383,13 +391,12 @@ describe("设置", () => {
     expect(screen.getByText("文件存储")).toBeInTheDocument();
     expect(screen.getByText("Agent / API")).toBeInTheDocument();
     expect(screen.getByText("高级设置")).toBeInTheDocument();
+    // Mock (demo) mode never claims a real platform/key state.
     expect(screen.getByLabelText("SolidWorks 程序路径")).toHaveValue(
-      "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\SLDWORKS.exe"
+      "当前为演示数据模式，不连接真实服务，也不会读取或保存密钥。"
     );
-    // Without a desktop bridge the key shows the unconfigured state; the
-    // editable key field is still present (masked input).
     expect(screen.getByLabelText("新 Agent API Key")).toHaveAttribute("type", "password");
-    expect(screen.getAllByText("未配置").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("已连接")).not.toBeInTheDocument();
   });
 
   it("expands the collapsed advanced group", async () => {
@@ -403,7 +410,7 @@ describe("设置", () => {
     await user.click(trigger);
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Prompt Template")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "查看" }).length).toBeGreaterThanOrEqual(5);
+    expect(screen.getAllByText("由服务端配置").length).toBeGreaterThanOrEqual(5);
   });
 
   it("saves and clears the API key through window.swpanel.secrets", async () => {
@@ -427,17 +434,34 @@ describe("设置", () => {
     expect(await screen.findByText("API Key 已保存")).toBeInTheDocument();
     expect(bridge.calls.some((call) => call.startsWith("secrets.setApiKey"))).toBe(true);
 
-    // Testing the connection now resolves as a success toast.
+    // A stored key alone cannot prove a connection.
+    expect(screen.queryByText("已连接")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "测试连接" }));
     expect(await screen.findByText("连接成功")).toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(call => typeof call[0] === "string" && call[0].endsWith("/api/settings/test-connection"))).toBe(true);
 
     // Clear the key: the masked preview disappears and the status reverts.
     await user.click(screen.getByRole("button", { name: "清除密钥" }));
+    // Clearing is destructive: a confirmation dialog must be accepted first.
+    await user.click(await screen.findByRole("button", { name: "确认清除" }));
     await waitFor(() => expect(bridge.state().apiKeyStatus.hasApiKey).toBe(false));
     expect(await screen.findByText("API Key 已清除")).toBeInTheDocument();
     expect(bridge.calls.some((call) => call.startsWith("secrets.clearApiKey"))).toBe(true);
     expect(screen.getAllByText("未配置").length).toBeGreaterThanOrEqual(1);
 
+    Reflect.deleteProperty(window, "swpanel");
+  });
+
+  it("shows real API test failure instead of claiming stored credentials are connected", async () => {
+    const bridge = createFakeBridge({ apiKeyStatus: { hasApiKey: true, maskedApiKey: "sk-****abcd" } });
+    Object.defineProperty(window, "swpanel", { value: bridge.api, configurable: true, writable: true });
+    vi.mocked(fetch).mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ ok: false, error: { code: "API_AUTH_FAILED", message: "Agent API 验证失败（HTTP 401）" } }), { status: 401 })));
+    renderSettingsWithToasts(MockRepository.create("run-running"));
+    await screen.findByText("sk-****abcd");
+    expect(screen.queryByText("已连接")).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "测试连接" }));
+    expect((await screen.findAllByText("Agent API 验证失败（HTTP 401）")).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("连接成功")).not.toBeInTheDocument();
     Reflect.deleteProperty(window, "swpanel");
   });
 

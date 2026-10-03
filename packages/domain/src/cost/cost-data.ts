@@ -15,6 +15,11 @@ export type CostDataSemantics = (typeof COST_DATA_SEMANTICS)[number];
 export const COST_BASES = ["PER_PIECE", "PER_BATCH"] as const;
 export type CostBasis = (typeof COST_BASES)[number];
 
+/** Price units understood by the cost workflow (shared by validation and quoting). */
+export const COST_PRICE_UNITS = ["元/吨", "元/kg", "元/千克", "元/件"] as const;
+/** Density units understood by the cost workflow. */
+export const COST_DENSITY_UNITS = ["g/cm³", "g/cm3"] as const;
+
 /** Definition describing one configurable cost data item. */
 export interface CostDataDefinition {
   id: string;

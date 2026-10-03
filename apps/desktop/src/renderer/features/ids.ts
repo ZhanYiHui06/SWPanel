@@ -111,3 +111,5 @@ export function revisionLabelOrId(repository: MockRepository, revisionId: string
   const revision = repository.getRevision(revisionId);
   return revision === undefined ? revisionId : revisionLabel(revision.sequence);
 }
+
+export { randomId } from "./random-id.js";

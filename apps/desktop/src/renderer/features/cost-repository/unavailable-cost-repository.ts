@@ -5,7 +5,7 @@ import { CostRepositoryError, type CostRepository } from "./cost-repository.js";
 
 const UNAVAILABLE_ERROR = new CostRepositoryError(
   "BRIDGE_UNAVAILABLE",
-  "The desktop bridge is not available. Running in a browser or without Electron?"
+  "未连接到 SWPanel 服务，请确认后端服务已启动。"
 );
 
 export class UnavailableCostRepository implements CostRepository {

@@ -1,6 +1,7 @@
 import "@swpanel/ui/fonts";
 import "@swpanel/ui/styles";
 import "./styles/app.css";
+import "./styles/phase1-pages.css";
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

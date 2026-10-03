@@ -21,8 +21,12 @@
  *    duplicates and ignored; a first event beyond `lastSequence + 1` is a GAP;
  * 3. any stream failure (gap / invalid / connection lost / closed) switches to
  *    the visible `recovering` state, refetches the snapshot and resubscribes
- *    from the new last sequence; after repeated failures the stream stops in a
- *    recoverable `error` state with `retry()`;
+ *    from the new last sequence. Connection failures retry with exponential
+ *    backoff (1s / 2s / 4s / 8s ...); the attempt counter resets once the
+ *    stream has been healthy for a while or applied a live event; after
+ *    repeated failures the stream stops in a recoverable `error` state with
+ *    `retry()`. The last good `detail` / `events` stay available in every
+ *    state, so pages can keep rendering them under a "reconnecting" banner;
  * 4. cleanup: the subscription, refetch and timers are torn down on route
  *    unmount or `runId` change (a changed runId also discards stale
  *    resolutions).
@@ -47,7 +51,11 @@ import type { SwpanelBridgeApi } from "../../../main/bridge/bridge-contract.js";
 import { PRODUCTION_DEFAULT_SCENARIO } from "../../fixtures/index.js";
 import { MockRepository } from "../mock-repository/mock-repository.js";
 import { resolveRepositoryScenario } from "../repository-provider.js";
+import { resolveRepositoryModeFrom } from "../repository-mode.js";
+import { broadcastRepositoryInvalidation, subscribeRepositoryInvalidation } from "../repository-invalidation.js";
+import { useRevalidateOnFocus } from "../repository-revalidation.js";
 import { BridgeRunRepository } from "./bridge-run-repository.js";
+import { HttpRunRepository } from "./http-run-repository.js";
 import { MockRunRepository } from "./mock-run-repository.js";
 import { UnavailableRunRepository } from "./unavailable-run-repository.js";
 import {
@@ -75,6 +83,13 @@ const DEFAULT_ENTRIES_REF: MutableRefObject<Map<string, QueryEntry>> = {
  */
 const NOOP = (): void => undefined;
 
+/**
+ * Provider-wide monotonic request id. It is NEVER reset by `invalidate()`, so a
+ * response of a request started before an invalidation can not be mistaken for
+ * the response of the request that replaced it.
+ */
+let nextRequestId = 0;
+
 interface QueryEntry {
   status: "loading" | "success" | "error";
   data: unknown;
@@ -93,6 +108,8 @@ interface RunRepositoryContextValue {
   /** Bumped on every query resolution so ALL consumers re-read shared entries. */
   readonly tick: number;
   readonly entriesRef: MutableRefObject<Map<string, QueryEntry>>;
+  /** Bumped by focus/visibility revalidation (stale data stays visible while refetching). */
+  readonly revalidation: number;
   readonly invalidate: () => void;
   readonly notify: () => void;
 }
@@ -118,7 +135,11 @@ export function resolveRunRepository(options: {
     // typed as `SwpanelBridgeApi` and frozen; no generic channel access exists.
     return new BridgeRunRepository(globalThis.window.swpanel as SwpanelBridgeApi);
   }
-  if (options.isDevelopment) {
+  const mode = resolveRepositoryModeFrom(options);
+  if (mode === "http") {
+    return new HttpRunRepository();
+  }
+  if (mode === "mock") {
     // Explicit mock adapter for browser preview/tests ONLY — scenario selectors
     // keep the canonical Phase 1 fixtures deterministic. Never used in product.
     return new MockRunRepository(
@@ -149,20 +170,39 @@ export function RunRepositoryProvider({
   );
   const [version, setVersion] = useState(0);
   const [tick, setTick] = useState(0);
+  const [revalidation, setRevalidation] = useState(0);
   const entriesRef = useRef<Map<string, QueryEntry>>(new Map());
 
-  const invalidate = useCallback(() => {
+  /** Clears this provider's cache only (also the target of cross-provider invalidation). */
+  const invalidateLocal = useCallback(() => {
     entriesRef.current.clear();
     setVersion((current) => current + 1);
   }, []);
+
+  /** Public invalidation: clear locally, then tell dependent providers to refresh. */
+  const invalidate = useCallback(() => {
+    invalidateLocal();
+    broadcastRepositoryInvalidation("run");
+  }, [invalidateLocal]);
+
+  useEffect(
+    () => subscribeRepositoryInvalidation("run", invalidateLocal),
+    [invalidateLocal]
+  );
+
+  const revalidate = useCallback(() => {
+    setRevalidation((current) => current + 1);
+  }, []);
+  // Real data can change behind the UI's back; fixtures can not.
+  useRevalidateOnFocus(revalidate, resolved.mode === "bridge");
 
   const notify = useCallback(() => {
     setTick((current) => current + 1);
   }, []);
 
   const value = useMemo<RunRepositoryContextValue>(
-    () => ({ repository: resolved, version, tick, entriesRef, invalidate, notify }),
-    [resolved, version, tick, invalidate, notify]
+    () => ({ repository: resolved, version, tick, revalidation, entriesRef, invalidate, notify }),
+    [resolved, version, tick, revalidation, invalidate, notify]
   );
 
   return <RunRepositoryContext.Provider value={value}>{children}</RunRepositoryContext.Provider>;
@@ -202,6 +242,7 @@ export function useRunQuery<T>(
   const context = useContext(RunRepositoryContext);
   const entriesRef = context?.entriesRef ?? DEFAULT_ENTRIES_REF;
   const version = context?.version ?? 0;
+  const revalidation = context?.revalidation ?? 0;
   const notify = context?.notify ?? NOOP;
   const tick = context?.tick ?? 0;
   const enabled = options.enabled ?? true;
@@ -232,15 +273,22 @@ export function useRunQuery<T>(
   useEffect(() => {
     const current = entriesRef.current.get(key);
     if (current === undefined || !enabled) return;
-    const fetchKey = `${version}:${current.retryTick}`;
+    const fetchKey = `${version}:${revalidation}:${current.retryTick}`;
     if (current.fetchedFor === fetchKey) return;
     current.fetchedFor = fetchKey;
-    current.status = "loading";
-    current.error = null;
-    current.requestId += 1;
+    // Refetching a cached success (focus revalidation) keeps the data on screen.
+    const background = current.status === "success";
+    if (!background) {
+      current.status = "loading";
+      current.error = null;
+    }
+    nextRequestId += 1;
+    current.requestId = nextRequestId;
     const requestId = current.requestId;
-    forceRender();
-    notify();
+    if (!background) {
+      forceRender();
+      notify();
+    }
 
     void fetcherRef.current().then(
       (data) => {
@@ -259,6 +307,8 @@ export function useRunQuery<T>(
       (error: unknown) => {
         const latest = entriesRef.current.get(key);
         if (latest === undefined || latest.requestId !== requestId) return;
+        // A failed background refresh keeps the last good data instead of an error page.
+        if (background) return;
         latest.status = "error";
         latest.data = undefined;
         latest.error = toRunRepositoryError(error);
@@ -266,7 +316,7 @@ export function useRunQuery<T>(
         notify();
       }
     );
-  }, [enabled, entriesRef, key, version, entry.retryTick, notify]);
+  }, [enabled, entriesRef, key, version, revalidation, entry.retryTick, notify]);
 
   // Re-read latest entry state when tick changes from another query resolving
   useEffect(() => {
@@ -306,12 +356,30 @@ export interface RunEventStreamState {
   readonly error: RunRepositoryError | null;
   /** Number of consecutive failed recovery attempts (bounded). */
   readonly recoveryAttempts: number;
+  /** Epoch ms at which the next reconnect attempt starts (backoff wait), else null. */
+  readonly nextRetryAt: number | null;
   /** Restarts the whole snapshot-then-subscribe flow. */
   retry(): void;
 }
 
-/** Consecutive stream-failure recoveries allowed before the stream stops. */
-const MAX_RECOVERY_ATTEMPTS = 3;
+/**
+ * Reconnect policy. Mutable on purpose so tests can shrink the delays; product
+ * code never changes it.
+ * - `maxAttempts`: consecutive recoveries allowed before the stream stops;
+ * - `baseDelayMs` / `maxDelayMs`: backoff `base * 2^(attempt-1)` capped at max;
+ * - `stableResetMs`: a stream that stayed `live` this long forgets earlier failures.
+ */
+export const runStreamRecoveryPolicy = {
+  maxAttempts: 5,
+  baseDelayMs: 1000,
+  maxDelayMs: 8000,
+  stableResetMs: 10_000
+};
+
+function recoveryDelayMs(attempt: number): number {
+  const { baseDelayMs, maxDelayMs } = runStreamRecoveryPolicy;
+  return Math.min(maxDelayMs, baseDelayMs * 2 ** Math.max(0, attempt - 1));
+}
 
 interface StreamSession {
   /** The runId this session belongs to (stale sessions never render/act). */
@@ -326,6 +394,11 @@ interface StreamSession {
   detail: RunDetailView | null;
   error: RunRepositoryError | null;
   unsubscribe: (() => void) | null;
+  /** True only while `repository.subscribeRunEvents` runs synchronously. */
+  subscribing: boolean;
+  /** Set when the stream failed synchronously inside `subscribeRunEvents`. */
+  failedDuringSubscribe: boolean;
+  nextRetryAt: number | null;
 }
 
 export function useRunEventStream(runId: string | null): RunEventStreamState {
@@ -351,9 +424,32 @@ export function useRunEventStream(runId: string | null): RunEventStreamState {
       events: [],
       detail: null,
       error: null,
-      unsubscribe: null
+      unsubscribe: null,
+      subscribing: false,
+      failedDuringSubscribe: false,
+      nextRetryAt: null
     };
     sessionRef.current = session;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelRetryWait: (() => void) | null = null;
+    let stableTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearStableTimer = (): void => {
+      if (stableTimer !== null) clearTimeout(stableTimer);
+      stableTimer = null;
+    };
+    /** A stream that stays healthy for a while forgets earlier failures. */
+    const armStableTimer = (): void => {
+      clearStableTimer();
+      stableTimer = setTimeout(() => {
+        stableTimer = null;
+        if (session.disposed) return;
+        if (session.status === "live") {
+          session.attempts = 0;
+          render();
+        }
+      }, runStreamRecoveryPolicy.stableResetMs);
+    };
 
     const render = (): void => forceRender();
 
@@ -362,23 +458,36 @@ export function useRunEventStream(runId: string | null): RunEventStreamState {
       session.disposed = true;
       session.unsubscribe?.();
       session.unsubscribe = null;
+      clearStableTimer();
+      if (retryTimer !== null) clearTimeout(retryTimer);
+      retryTimer = null;
+      cancelRetryWait?.();
+      cancelRetryWait = null;
     };
 
     /** Subscribes after the current watermark and wires batch application. */
     const subscribe = (fromSequence: number): void => {
       session.unsubscribe?.();
+      session.subscribing = true;
+      session.failedDuringSubscribe = false;
       session.unsubscribe = repository.subscribeRunEvents(
         { runId, fromSequence },
         (push) => {
           if (session.disposed) return;
           if (push.runId !== runId) return;
           if (push.kind === "runEventsError") {
+            if (session.subscribing) {
+              // Failed before `subscribe` even returned: the caller handles it.
+              session.failedDuringSubscribe = true;
+              return;
+            }
             void recover();
             return;
           }
           applyBatch(push.events);
         }
       );
+      session.subscribing = false;
     };
 
     /** Refetches list queries once when a live event changed the run status. */
@@ -401,8 +510,10 @@ export function useRunEventStream(runId: string | null): RunEventStreamState {
       for (const event of events) {
         if (event.sequence <= session.lastSequence) continue; // duplicate: ignore
         if (event.sequence > session.lastSequence + 1) {
-          // Gap: never silently apply; refetch + resubscribe.
-          void recover();
+          // Gap: never silently apply; refetch + resubscribe (no backoff: the
+          // connection itself is fine). Keep what was applied so far.
+          if (merged !== null) session.detail = merged;
+          void recover(true);
           return;
         }
         session.lastSequence = event.sequence;
@@ -421,28 +532,45 @@ export function useRunEventStream(runId: string | null): RunEventStreamState {
       render();
     };
 
-    /** Stream failure path: visible recovering state, refetch, resubscribe. */
-    const recover = async (): Promise<void> => {
+    /**
+     * Stream failure path: visible recovering state, (backoff wait), refetch,
+     * resubscribe. `immediate` skips the backoff wait (sequence gaps).
+     */
+    const recover = async (immediate = false): Promise<void> => {
       if (session.disposed) return;
       if (session.recovering) return; // in-flight guard: one recovery at a time
       session.recovering = true;
+      clearStableTimer();
       session.unsubscribe?.();
       session.unsubscribe = null;
       session.attempts += 1;
-      if (session.attempts > MAX_RECOVERY_ATTEMPTS) {
+      if (session.attempts > runStreamRecoveryPolicy.maxAttempts) {
         // Repeated failures: stop in a recoverable error state.
         session.status = "error";
         session.error = new RunRepositoryError(
           "RUN_EVENT_STREAM_LOST",
           "Run 事件流多次同步失败；请点击重试重新连接。"
         );
+        session.nextRetryAt = null;
         session.recovering = false;
         render();
         return;
       }
       session.status = "recovering";
       session.error = null;
+      const delay = immediate ? 0 : recoveryDelayMs(session.attempts);
+      session.nextRetryAt = delay > 0 ? Date.now() + delay : null;
       render();
+      if (delay > 0) {
+        await new Promise<void>((resolve) => {
+          cancelRetryWait = resolve;
+          retryTimer = setTimeout(resolve, delay);
+        });
+        retryTimer = null;
+        cancelRetryWait = null;
+        session.nextRetryAt = null;
+        if (session.disposed) return;
+      }
       try {
         const previousStatus = session.detail?.run.status;
         const detail = await repository.getRunDetail(runId);
@@ -452,14 +580,26 @@ export function useRunEventStream(runId: string | null): RunEventStreamState {
         session.lastSequence = detail.lastEventSequence;
         invalidateOnStatusChange(previousStatus, detail.run.status);
         subscribe(session.lastSequence + 1);
-        session.status = "live";
         session.recovering = false;
+        if (session.failedDuringSubscribe) {
+          // The new subscription died immediately: back off and try again.
+          void recover();
+          return;
+        }
+        session.status = "live";
+        armStableTimer();
         render();
       } catch (error) {
         if (session.disposed) return;
+        // Snapshot refetch failed (typically still offline): keep retrying with
+        // backoff until the attempts run out; previous data stays visible.
+        session.recovering = false;
+        if (session.attempts < runStreamRecoveryPolicy.maxAttempts) {
+          void recover();
+          return;
+        }
         session.status = "error";
         session.error = toRunRepositoryError(error);
-        session.recovering = false;
         render();
       }
     };
@@ -480,7 +620,12 @@ export function useRunEventStream(runId: string | null): RunEventStreamState {
         session.events = [...detail.events];
         session.lastSequence = detail.lastEventSequence;
         subscribe(session.lastSequence + 1);
+        if (session.failedDuringSubscribe) {
+          void recover();
+          return;
+        }
         session.status = "live";
+        armStableTimer();
         render();
       } catch (error) {
         if (session.disposed) return;
@@ -506,6 +651,7 @@ export function useRunEventStream(runId: string | null): RunEventStreamState {
       lastSequence: 0,
       error: null,
       recoveryAttempts: 0,
+      nextRetryAt: null,
       retry
     };
   }
@@ -517,6 +663,7 @@ export function useRunEventStream(runId: string | null): RunEventStreamState {
     lastSequence: session.lastSequence,
     error: session.error,
     recoveryAttempts: session.attempts,
+    nextRetryAt: session.nextRetryAt,
     retry
   };
 }

@@ -30,6 +30,8 @@ apps/desktop/.vite/
 !.env.example
 *.pem
 *.key
+secrets.env
+secrets.env.*.tmp
 
 # Logs and crash output
 *.log
@@ -39,7 +41,7 @@ crash-dumps/
 # SWPanel runtime data
 runtime/
 workspaces/
-artifacts/
+/artifacts/
 .local-data/
 *.db
 *.db-shm

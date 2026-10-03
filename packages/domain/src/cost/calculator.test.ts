@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { DomainInvariantError } from "../errors.js";
-import { calculateCostEstimate, DEFAULT_STEEL_DENSITY, DEFAULT_STOCK_VOLUME_FACTOR, roundCny } from "./calculator.js";
+import {
+  calculateCostEstimate,
+  DEFAULT_STEEL_DENSITY,
+  DEFAULT_STOCK_VOLUME_FACTOR,
+  MAX_COST_QUANTITY,
+  parseStockSpec,
+  roundCny
+} from "./calculator.js";
 import type { AllowanceValue, CostDataSnapshot, FixedCostValue, MaterialCostValue } from "./cost-data.js";
 import type { CostEstimateInputSnapshot } from "./cost-estimate.js";
 
@@ -107,6 +114,20 @@ describe("roundCny", () => {
     expect(roundCny(0.1 + 0.2)).toBe(0.3);
   });
 
+  it("rounds decimal half-cent values up even when the binary form sits just below (BE-12)", () => {
+    expect(roundCny(2.135)).toBe(2.14);
+    expect(roundCny(2.175)).toBe(2.18);
+    expect(roundCny(4.015)).toBe(4.02);
+    expect(roundCny(1.255)).toBe(1.26);
+    expect(roundCny(1234567.895)).toBe(1234567.9);
+  });
+
+  it("passes through non-finite values and tiny exponent-form values safely", () => {
+    expect(roundCny(Infinity)).toBe(Infinity);
+    expect(Number.isNaN(roundCny(NaN))).toBe(true);
+    expect(roundCny(1e-9)).toBe(0);
+  });
+
   it("rounds integers and exact-cent values unchanged", () => {
     expect(roundCny(1873.42)).toBe(1873.42);
     expect(roundCny(100)).toBe(100);
@@ -143,6 +164,15 @@ describe("rawStockVolume", () => {
 
     const noUnit = calculateCostEstimate(makeInput({ stockSpec: "320x820" }));
     expect(noUnit.rawStockVolume).toBeCloseTo(CANONICAL_RAW_VOLUME, 12);
+  });
+
+  it("reads units glued to the number, with any case, spacing and full-width characters (BE-11)", () => {
+    for (const spec of ["Ø0.32 × 0.82m", "Ø0.32×0.82M", "Ø320 × 820mm", "Ø320x820 MM", "Ø32 × 82CM", "Ø３２０ ｘ ８２０ ｍｍ"]) {
+      const result = calculateCostEstimate(makeInput({ stockSpec: spec }));
+      expect(result.rawStockVolume, spec).toBeCloseTo(CANONICAL_RAW_VOLUME, 12);
+    }
+    const bar = calculateCostEstimate(makeInput({ stockType: "RECTANGULAR_BAR", stockSpec: "0.2×0.1×0.4m" }));
+    expect(bar.rawStockVolume).toBeCloseTo((200 * 100 * 400) / 1e9, 12);
   });
 
   it("derives the raw volume from finishedVolume + allowances when the spec is unparseable", () => {
@@ -426,6 +456,14 @@ describe("input validation", () => {
     );
   });
 
+  it("rejects an excessive quantity and overflowing amounts", () => {
+    expect(() => calculateCostEstimate(makeInput({ quantity: MAX_COST_QUANTITY + 1 }))).toThrow(DomainInvariantError);
+    expect(() => calculateCostEstimate(makeInput({ quantity: MAX_COST_QUANTITY }))).not.toThrow();
+    expect(() =>
+      calculateCostEstimate(makeInput({ costData: costData({ materials: [material({ purchasePrice: 1e308 })] }) }))
+    ).toThrow(DomainInvariantError);
+  });
+
   it("rejects an unknown material id", () => {
     expect(() =>
       calculateCostEstimate(makeInput({ materialId: "material-unknown" }))
@@ -437,5 +475,40 @@ describe("input validation", () => {
     const snapshot = JSON.stringify(input);
     calculateCostEstimate(input);
     expect(JSON.stringify(input)).toBe(snapshot);
+  });
+});
+
+describe("parseStockSpec (single shared parser, BE-11)", () => {
+  it("parses cylinders and bars into millimetres and m³", () => {
+    const cylinder = parseStockSpec("Ø320 × 820 mm", "CYLINDER");
+    expect(cylinder?.dimensionsMm).toEqual([320, 820]);
+    expect(cylinder?.unit).toBe("mm");
+    expect(cylinder?.volumeM3).toBeCloseTo(CANONICAL_RAW_VOLUME, 12);
+    expect(parseStockSpec("200 * 100 x 400 cm", "RECTANGULAR_BAR")?.dimensionsMm).toEqual([2000, 1000, 4000]);
+  });
+
+  it("accepts glued, spaced, upper-case and full-width forms", () => {
+    expect(parseStockSpec("820mm×320mm", "CYLINDER")).toBeNull(); // unit only allowed once, at the end
+    expect(parseStockSpec("320×820mm", "CYLINDER")?.dimensionsMm).toEqual([320, 820]);
+    expect(parseStockSpec("0.32 × 0.82 M", "CYLINDER")?.dimensionsMm).toEqual([320, 820]);
+    expect(parseStockSpec("φ３２０×８２０ｍｍ", "CYLINDER")?.dimensionsMm).toEqual([320, 820]);
+    expect(parseStockSpec("Ø32.5 × 82.5 mm", "CYLINDER")?.dimensionsMm).toEqual([32.5, 82.5]);
+  });
+
+  it("requires an explicit unit only when asked to", () => {
+    expect(parseStockSpec("320x820", "CYLINDER")?.unit).toBeNull();
+    expect(parseStockSpec("320x820", "CYLINDER", { requireUnit: true })).toBeNull();
+    expect(parseStockSpec("320x820 mm", "CYLINDER", { requireUnit: true })?.unit).toBe("mm");
+  });
+
+  it("rejects wrong arity, zero/negative/garbage dimensions and unknown units", () => {
+    expect(parseStockSpec("", "CYLINDER")).toBeNull();
+    expect(parseStockSpec("Ø320 × 820 × 10 mm", "CYLINDER")).toBeNull();
+    expect(parseStockSpec("200 × 100 mm", "RECTANGULAR_BAR")).toBeNull();
+    expect(parseStockSpec("Ø0 × 820 mm", "CYLINDER")).toBeNull();
+    expect(parseStockSpec("Ø-5 × 820 mm", "CYLINDER")).toBeNull();
+    expect(parseStockSpec("Ø320 × 820 inch", "CYLINDER")).toBeNull();
+    expect(parseStockSpec("unparseable spec", "CYLINDER")).toBeNull();
+    expect(parseStockSpec("Ø1e999 × 1 mm", "CYLINDER")).toBeNull();
   });
 });

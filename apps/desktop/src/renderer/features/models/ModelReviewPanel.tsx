@@ -1,12 +1,15 @@
-import { Button, Textarea } from "@swpanel/ui";
+import { Button, InlineNotice, Textarea } from "@swpanel/ui";
 import { useState } from "react";
 
 import type { ModelDetailView } from "@swpanel/contracts";
 
+import { describeError } from "../error-messages.js";
 import { formatRelativeTime } from "../format.js";
 import { modelStatusLabel } from "../status.js";
+import { INTERNAL_REVIEWER_ID, reviewerDisplayName } from "./reviewer.js";
 
-export const MODEL_REVIEWER_ID = "current-windows-user";
+/** Kept for existing imports; see `reviewer.ts` for the identity caveat. */
+export const MODEL_REVIEWER_ID = INTERNAL_REVIEWER_ID;
 
 /** One APPROVE / REJECT submission as sent to the ModelRepository. */
 export interface ModelReviewSubmitInput {
@@ -14,8 +17,8 @@ export interface ModelReviewSubmitInput {
   readonly result: "APPROVED" | "REJECTED";
   /** Required when `result` is REJECTED (written into the revision feedback). */
   readonly comment?: string;
+  /** Not an authenticated identity (see `reviewer.ts`). */
   readonly reviewerId: string;
-  readonly reviewedAt: string;
 }
 
 export interface ModelReviewPanelProps {
@@ -28,18 +31,6 @@ export interface ModelReviewPanelProps {
    */
   readonly reviewModel: (input: ModelReviewSubmitInput) => Promise<unknown>;
   readonly onReviewed?: () => void;
-}
-
-/** True when the thrown value carries a stable bridge/runner error code. */
-function structuredMessage(error: unknown): string {
-  if (
-    error instanceof Error &&
-    "code" in error &&
-    typeof (error as { code: unknown }).code === "string"
-  ) {
-    return error.message;
-  }
-  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -57,16 +48,11 @@ export function ModelReviewPanel({ model, reviewModel, onReviewed }: ModelReview
 
   if (model.reviewStatus !== "PENDING_REVIEW") {
     return (
-      <div className="inline-notice success">
-        <div className="inline-notice-content">
-          <div className="inline-notice-title">{modelStatusLabel(model.reviewStatus)}</div>
-          <div className="inline-notice-text">
-            {model.reviewStatus === "APPROVED"
-              ? "该模型已通过人工审核，为当前正式模型。可用于生成成本测算报告。"
-              : "该模型已退回，修订通过新建 Run 重新建模后再审核。"}
-          </div>
-        </div>
-      </div>
+      <InlineNotice tone="success" title={modelStatusLabel(model.reviewStatus)}>
+        {model.reviewStatus === "APPROVED"
+          ? "该模型已通过人工审核，为当前正式模型。可用于生成成本测算报告。"
+          : "该模型已退回，修订通过新建 Run 重新建模后再审核。"}
+      </InlineNotice>
     );
   }
 
@@ -89,12 +75,11 @@ export function ModelReviewPanel({ model, reviewModel, onReviewed }: ModelReview
       await reviewModel({
         modelId: model.modelId,
         result: "APPROVED",
-        reviewerId: MODEL_REVIEWER_ID,
-        reviewedAt: new Date().toISOString()
+        reviewerId: MODEL_REVIEWER_ID
       });
       onReviewed?.();
     } catch (caught) {
-      setError(structuredMessage(caught));
+      setError(describeError(caught).message);
     } finally {
       setBusy(false);
     }
@@ -114,12 +99,11 @@ export function ModelReviewPanel({ model, reviewModel, onReviewed }: ModelReview
         modelId: model.modelId,
         result: "REJECTED",
         reviewerId: MODEL_REVIEWER_ID,
-        reviewedAt: new Date().toISOString(),
         comment: trimmed
       });
       onReviewed?.();
     } catch (caught) {
-      setError(structuredMessage(caught));
+      setError(describeError(caught).message);
     } finally {
       setBusy(false);
     }
@@ -183,14 +167,14 @@ export function ModelReviewHistory({ reviews }: { reviews: readonly ModelDetailV
   return (
     <div className="mt-6">
       {reviews.map((review) => (
-        <div className="inline-notice mt-2" key={review.reviewId}>
-          <div className="inline-notice-content">
-            <div className="inline-notice-title">
-              {review.result === "APPROVED" ? "审核通过" : "已退回"} · {formatRelativeTime(review.createdAt)}
-            </div>
-            {review.comment !== null && <div className="inline-notice-text">退回原因：{review.comment}</div>}
-          </div>
-        </div>
+        <InlineNotice
+          tone="neutral"
+          className="mt-2"
+          key={review.reviewId}
+          title={`${review.result === "APPROVED" ? "审核通过" : "已退回"} · ${reviewerDisplayName(review.reviewerId)} · ${formatRelativeTime(review.createdAt)}`}
+        >
+          {review.comment !== null ? `退回原因：${review.comment}` : "无附加说明"}
+        </InlineNotice>
       ))}
     </div>
   );

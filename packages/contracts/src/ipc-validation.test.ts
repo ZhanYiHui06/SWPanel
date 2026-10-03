@@ -287,6 +287,53 @@ describe("ipc envelope validation", () => {
     ).toThrow(expect.objectContaining({ code: "INVALID_PAYLOAD" }) as object);
   });
 
+  it("bounds text lengths and requires canonical timestamps on drawing commands (BE-10)", () => {
+    const fact = {
+      command: "drawing.addRevisionFact",
+      drawingId: "d1",
+      revisionId: "r1",
+      field: "材料",
+      value: "42CrMo",
+      source: "USER_SUPPLEMENT"
+    };
+    const envelope = (operation: string, payload: Record<string, unknown>) => ({
+      protocolVersion: IPC_PROTOCOL_VERSION,
+      requestId: "req-1",
+      channel: "command",
+      operation,
+      payload
+    });
+    const bad = (operation: string, payload: Record<string, unknown>): void =>
+      expect(() => validateIpcRequestEnvelope(envelope(operation, payload))).toThrow(
+        expect.objectContaining({ code: "INVALID_PAYLOAD" }) as object
+      );
+    // createdAt is optional (the server stamps it) but must be canonical when sent.
+    expect(() => validateIpcRequestEnvelope(envelope("drawing.addRevisionFact", fact))).not.toThrow();
+    expect(() =>
+      validateIpcRequestEnvelope(envelope("drawing.addRevisionFact", { ...fact, createdAt: "2026-08-12T00:00:00.000Z" }))
+    ).not.toThrow();
+    bad("drawing.addRevisionFact", { ...fact, createdAt: "abc" });
+    bad("drawing.addRevisionFact", { ...fact, createdAt: "2026-08-12" });
+    bad("drawing.addRevisionFact", { ...fact, field: "f".repeat(101) });
+    bad("drawing.addRevisionFact", { ...fact, value: "v".repeat(4001) });
+    const drawing = {
+      command: "drawing.create",
+      drawingNumber: "PDJF-001",
+      name: "轧辊",
+      createdAt: "2026-08-12T00:00:00.000Z",
+      sourceFile: { fileName: "a.pdf", format: "PDF", sizeBytes: 10, sha256: "a".repeat(64) }
+    };
+    expect(() => validateIpcRequestEnvelope(envelope("drawing.create", drawing))).not.toThrow();
+    bad("drawing.create", { ...drawing, drawingNumber: "N".repeat(65) });
+    bad("drawing.create", { ...drawing, name: "N".repeat(201) });
+    bad("drawing.create", { ...drawing, createdAt: "yesterday" });
+    // Server-stamped review / answer timestamps are optional.
+    const review = { command: "model.review", modelId: "m1", result: "APPROVED", reviewerId: "alice" };
+    expect(() => validateIpcRequestEnvelope(envelope("model.review", review))).not.toThrow();
+    bad("model.review", { ...review, reviewedAt: "not-a-date" });
+    bad("model.review", { ...review, result: "REJECTED", comment: "c".repeat(2001) });
+  });
+
   it("accepts a run.create payload carrying only the drawing/revision pair", () => {
     const request = {
       protocolVersion: IPC_PROTOCOL_VERSION,
@@ -749,10 +796,11 @@ describe("ipc envelope validation", () => {
         );
       };
       const reviewedAt = "2026-08-13T00:00:00.000Z";
-      // Missing modelId / reviewerId / reviewedAt / result.
+      // Missing modelId / reviewerId / result. reviewedAt is server-stamped and
+      // therefore optional (only a malformed value is rejected).
       fails({ result: "APPROVED", reviewerId: "alice", reviewedAt });
       fails({ modelId: "model-1", result: "APPROVED", reviewedAt });
-      fails({ modelId: "model-1", result: "APPROVED", reviewerId: "alice" });
+      fails({ modelId: "model-1", result: "APPROVED", reviewerId: "alice", reviewedAt: "yesterday" });
       fails({ modelId: "model-1", reviewerId: "alice", reviewedAt });
       // Blank values are rejected the same way.
       fails({ modelId: "", result: "APPROVED", reviewerId: "alice", reviewedAt });
@@ -1000,6 +1048,40 @@ describe("ipc envelope validation", () => {
       });
     });
 
+    it("rejects out-of-range numbers, unsupported units, duplicates and oversized collections (BE-10)", () => {
+      const base = validCostDataSnapshot(true);
+      const [material] = base.materials as Record<string, unknown>[];
+      const [fixedCost] = base.fixedCosts as Record<string, unknown>[];
+      const [customField] = base.customFields as Record<string, unknown>[];
+      const withMaterials = (materials: Record<string, unknown>[]): Record<string, unknown> => ({ ...base, materials });
+      fails({ snapshot: withMaterials([{ ...material, purchasePrice: 1e308 }]) });
+      fails({ snapshot: withMaterials([{ ...material, purchasePrice: 1e9 + 1 }]) });
+      fails({ snapshot: withMaterials([{ ...material, density: 1e6 }]) });
+      fails({ snapshot: withMaterials([{ ...material, priceUnit: "美元/吨" }]) });
+      fails({ snapshot: withMaterials([{ ...material, densityUnit: "kg/m3" }]) });
+      fails({ snapshot: withMaterials([{ ...material, name: "x".repeat(201) }]) });
+      fails({ snapshot: withMaterials([{ ...material, effectiveFrom: "not-a-date" }]) });
+      // duplicate material id / name
+      fails({ snapshot: withMaterials([material as Record<string, unknown>, { ...material, name: "另一种" }]) });
+      fails({ snapshot: withMaterials([material as Record<string, unknown>, { ...material, id: "material-other" }]) });
+      fails({ snapshot: { ...base, fixedCosts: [fixedCost, { ...fixedCost, name: "另一个" }] } });
+      fails({ snapshot: { ...base, fixedCosts: [fixedCost, { ...fixedCost, id: "fixed-other" }] } });
+      fails({ snapshot: { ...base, fixedCosts: [{ ...fixedCost, amount: 1e308 }] } });
+      fails({ snapshot: { ...base, customFields: [customField, { ...customField, id: "custom-other", name: "另一个" }] } });
+      fails({ snapshot: { ...base, customFields: [customField, { ...customField, id: "custom-other", key: "custom.other" }] } });
+      fails({ snapshot: { ...base, customFields: [{ ...customField, value: "x".repeat(4001) }] } });
+      const many = Array.from({ length: 501 }, (_, index) => ({ ...material, id: `m-${index}`, name: `材料${index}` }));
+      fails({ snapshot: withMaterials(many) });
+      // a well-formed, distinct pair is still accepted
+      expect(() =>
+        validateIpcRequestEnvelope(
+          costDataUpdateEnvelope({
+            snapshot: withMaterials([material as Record<string, unknown>, { ...material, id: "material-other", name: "45#钢" }])
+          })
+        )
+      ).not.toThrow();
+    });
+
     it("rejects unknown keys on the payload itself (including forged result/updatedAt)", () => {
       fails({ result: { perPieceCost: 0 } });
       fails({ updatedAt: "2026-08-10T08:00:00.000Z" });
@@ -1025,6 +1107,15 @@ describe("ipc envelope validation", () => {
 
     it("rejects a payload whose discriminator does not match the operation", () => {
       fails({ command: "costData.update" });
+    });
+
+    it("rejects an excessive quantity, finished volume or stock spec length (BE-10/BE-12)", () => {
+      fails({ input: { ...validCostReportInput(), quantity: 1_000_001 } });
+      expect(() =>
+        validateIpcRequestEnvelope(costReportCreateEnvelope({ input: { ...validCostReportInput(), quantity: 1_000_000 } }))
+      ).not.toThrow();
+      fails({ input: { ...validCostReportInput(), finishedVolume: 1e30 } });
+      fails({ input: { ...validCostReportInput(), stockSpec: "9".repeat(101) } });
     });
 
     it("rejects a missing/blank createdAt and a missing/non-object input", () => {

@@ -23,6 +23,7 @@ import { useModelInvalidate, useModelDetailQuery, useModelRepository } from "../
 import { isModelNotFoundError } from "../features/model-repository/model-repository.js";
 import { MockModelRepository } from "../features/model-repository/mock-model-repository.js";
 import { useRunIdentity } from "../features/run-repository/run-display.js";
+import { useRevisionDetailQuery } from "../features/bridge-repository/drawing-repository-provider.js";
 import {
   resolveDrawingId,
   resolveModelId,
@@ -32,6 +33,8 @@ import {
 import { formatBytes, formatRelativeTime } from "../features/format.js";
 import { modelStatusBadge, modelStatusLabel } from "../features/status.js";
 import { ModelPreview } from "../features/models/ModelPreview.js";
+import { shortId } from "../features/models/identifiers.js";
+import { reviewerDisplayName } from "../features/models/reviewer.js";
 import {
   ModelReviewPanel,
   type ModelReviewSubmitInput
@@ -121,7 +124,7 @@ function MockModelDetailPage({ now }: { readonly now: Date }): React.JSX.Element
       drawingNumber={drawingDetail.drawing.drawingNumber}
       drawingName={drawingDetail.drawing.name}
       revisionLabel={revisionLabelOrId(repository, revisionId)}
-      runLabel={run?.number ?? detail.model.runId}
+      runLabel={run?.number ?? shortId(detail.model.runId)}
       reviewModel={reviewModel}
       onReviewed={onReviewed}
     />
@@ -135,8 +138,12 @@ function MockModelDetailPage({ now }: { readonly now: Date }): React.JSX.Element
 function ProductModelDetailPage({ now }: { readonly now: Date }): React.JSX.Element {
   const parameters = useParams();
   const modelIdParam = parameters.modelId;
+  const modelKey = modelIdParam === undefined || modelIdParam === "" ? null : modelIdParam;
   const modelRepository = useModelRepository();
   const invalidateModels = useModelInvalidate();
+  // Hooks must run on every render: the query is declared before any early
+  // return and simply stays disabled while the route parameter is missing.
+  const modelQuery = useModelDetailQuery(modelKey);
 
   const reviewModel = useCallback(
     async (input: ModelReviewSubmitInput) => {
@@ -151,17 +158,15 @@ function ProductModelDetailPage({ now }: { readonly now: Date }): React.JSX.Elem
   const shell = (children: React.ReactNode): React.JSX.Element => (
     <div className="page-content wide" data-route-id="model-detail">
       <div className="section section-tight">
-        <h1 className="page-header-title">Model Detail</h1>
+        <h1 className="page-header-title">模型详情</h1>
       </div>
       {children}
     </div>
   );
 
-  if (modelIdParam === undefined || modelIdParam === "") {
+  if (modelKey === null) {
     return <Navigate to="/drawings" replace />;
   }
-
-  const modelQuery = useModelDetailQuery(modelIdParam);
 
   if (modelQuery.status === "loading" || (modelQuery.status === "success" && modelQuery.data === undefined)) {
     return shell(<QueryLoadingState label="正在加载模型详情…" />);
@@ -172,7 +177,7 @@ function ProductModelDetailPage({ now }: { readonly now: Date }): React.JSX.Elem
       return shell(
         <div className="data-sheet">
           <InlineNotice tone="error" title="模型不存在或已被删除">
-            无法打开模型 {modelIdParam} 的详情页面。
+            无法打开该模型的详情页面，它可能已被删除，请返回图纸库重新选择。
           </InlineNotice>
           <div className="mt-4">
             <Link to="/drawings" className="btn btn-secondary btn-sm">
@@ -203,6 +208,26 @@ function ProductModelDetailPage({ now }: { readonly now: Date }): React.JSX.Elem
   }
 
   const detail = modelQuery.data;
+  const ownershipMismatch =
+    (parameters.drawingId !== undefined && parameters.drawingId !== detail.model.drawingId) ||
+    (parameters.revisionId !== undefined && parameters.revisionId !== detail.model.revisionId);
+  if (ownershipMismatch) {
+    return shell(
+      <div className="data-sheet">
+        <InlineNotice tone="warning" title="该模型不属于此图纸版本">
+          链接中的图纸或版本与模型实际所属不一致，请从图纸的模型列表重新打开。
+        </InlineNotice>
+        <div className="mt-4">
+          <Link
+            to={`/drawings/${detail.model.drawingId}/revisions/${detail.model.revisionId}/models/${detail.model.modelId}`}
+            className="btn btn-secondary btn-sm"
+          >
+            打开模型所在版本
+          </Link>
+        </div>
+      </div>
+    );
+  }
   return (
     <ProductModelDetailContent
       detail={detail}
@@ -227,6 +252,11 @@ function ProductModelDetailContent({
 }): React.JSX.Element {
   const model = detail.model;
   const identity = useRunIdentity(model.drawingId, model.revisionId);
+  // Resolve the business Run label (R05) through the cached revision detail;
+  // a raw Runner id is long and opaque, so fall back to a short identifier.
+  const revisionQuery = useRevisionDetailQuery(model.drawingId, model.revisionId);
+  const runLabel =
+    revisionQuery.data?.runs.find((candidate) => candidate.runId === model.runId)?.runLabel ?? shortId(model.runId);
   return (
     <ModelDetailContent
       detail={detail}
@@ -234,9 +264,10 @@ function ProductModelDetailContent({
       drawingNumber={identity.drawingNumber}
       drawingName={identity.drawingName}
       revisionLabel={identity.revisionLabel}
-      runLabel={model.runId}
+      runLabel={runLabel}
       reviewModel={reviewModel}
       onReviewed={onReviewed}
+      product
     />
   );
 }
@@ -253,8 +284,10 @@ function ModelDetailContent({
   revisionLabel,
   runLabel,
   reviewModel,
-  onReviewed
+  onReviewed,
+  product = false
 }: {
+  readonly product?: boolean;
   readonly detail: ModelDetailView;
   readonly now: Date;
   readonly drawingNumber: string;
@@ -265,14 +298,22 @@ function ModelDetailContent({
   readonly onReviewed: () => void;
 }): React.JSX.Element {
   const model = detail.model;
+  const repository = useModelRepository();
+  const previewArtifact = detail.artifacts.find((artifact) => artifact.kind === "PREVIEW");
+  const modelArtifact = detail.artifacts.find((artifact) => artifact.kind === "SLDPRT");
+  const previewUrl = product && previewArtifact ? repository.artifactUrl?.(model.modelId, previewArtifact.artifactId) : undefined;
+  const downloadUrl = product && modelArtifact ? repository.artifactUrl?.(model.modelId, modelArtifact.artifactId, true) : undefined;
+
+  const modelsListPath = `/drawings/${model.drawingId}/revisions/${model.revisionId}/models`;
+  const canEstimateCost = model.reviewStatus === "APPROVED" && model.isCurrentApproved && (!product || Boolean(detail.geometry));
 
   const validationRows: ValidationRow[] = (() => {
     const summary = model.validationSummary;
     if (summary === null) return [];
     const rows: ValidationRow[] = [
-      { label: "Rebuild", result: summary.rebuildStatus === "PASSED" ? "通过" : "失败", pass: summary.rebuildStatus === "PASSED" },
-      { label: "Body Count", result: `${summary.bodyCount} body`, pass: summary.bodyCount > 0 },
-      { label: "Feature Count", result: `${summary.featureCount} features`, pass: summary.featureCount > 0 }
+      { label: "重建", result: summary.rebuildStatus === "PASSED" ? "通过" : "失败", pass: summary.rebuildStatus === "PASSED" },
+      { label: "实体数", result: `${summary.bodyCount} 个实体`, pass: summary.bodyCount > 0 },
+      { label: "特征数", result: `${summary.featureCount} 个特征`, pass: summary.featureCount > 0 }
     ];
     return rows;
   })();
@@ -303,14 +344,19 @@ function ModelDetailContent({
             </div>
           </div>
           <div className="workspace-header-actions">
-            <Button variant="secondary" size="sm">
-              <FileIcon aria-hidden="true" />
-              在 SolidWorks 中打开
-            </Button>
+            <Link className="btn btn-ghost btn-sm" to={modelsListPath}>
+              返回模型列表
+            </Link>
+            {product ? (
+              downloadUrl ? <a className="btn btn-secondary btn-sm" href={downloadUrl} download={modelArtifact?.fileName}>
+                <FileIcon aria-hidden="true" />下载 SolidWorks 模型
+              </a> : <span className="text-sm text-muted">模型文件暂不可下载</span>
+            ) : <Button variant="secondary" size="sm"><FileIcon aria-hidden="true" />在 SolidWorks 中打开</Button>}
           </div>
         </div>
       </div>
 
+      {product && <InlineNotice tone="info" className="mb-4">浏览器中请先下载 SLDPRT 文件，再使用本机 SolidWorks 打开检查。</InlineNotice>}
       <div className="grid-2">
         <Card>
           <CardHeader>
@@ -318,7 +364,8 @@ function ModelDetailContent({
           </CardHeader>
           <CardBody>
             <div className="model-preview">
-              <ModelPreview modelLabel={model.modelLabel} size={200} showLabel />
+              <ModelPreview modelLabel={model.modelLabel} size={200} showLabel placeholder={!product}
+                {...(previewUrl ? { imageUrl: previewUrl } : {})} />
               <div className="model-preview-placeholder-label">
                 MODEL {model.modelLabel} · SLDPRT
               </div>
@@ -344,8 +391,35 @@ function ModelDetailContent({
             </CardBody>
           </Card>
 
+          {/* Validation is the evidence a reviewer needs, so it is shown for
+              every review status and sits above the review actions. */}
+          <Card className={model.reviewStatus === "PENDING_REVIEW" ? "mb-6" : ""}>
+            <CardHeader>
+              <CardTitle>验证结果</CardTitle>
+            </CardHeader>
+            <CardBody>
+              {validationRows.length === 0 ? (
+                <p className="text-sm text-muted">暂无验证信息</p>
+              ) : (
+                <div className="validation-list">
+                  {validationRows.map((row) => (
+                    <div className="validation-item" key={row.label}>
+                      <span className={`validation-item-icon ${row.pass ? "pass" : "fail"}`}>
+                        <CheckIcon aria-hidden="true" />
+                      </span>
+                      <span className="validation-item-label">{row.label}</span>
+                      <span className={`validation-item-result ${row.pass ? "pass" : "fail"}`}>
+                        {row.result}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+
           {model.reviewStatus === "PENDING_REVIEW" && (
-            <Card className="mb-6">
+            <Card>
               <CardHeader>
                 <CardTitle>模型审核</CardTitle>
               </CardHeader>
@@ -355,33 +429,6 @@ function ModelDetailContent({
                   reviewModel={reviewModel}
                   onReviewed={onReviewed}
                 />
-              </CardBody>
-            </Card>
-          )}
-
-          {model.reviewStatus !== "PENDING_REVIEW" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Validation</CardTitle>
-              </CardHeader>
-              <CardBody>
-                {validationRows.length === 0 ? (
-                  <p className="text-sm text-muted">暂无验证信息</p>
-                ) : (
-                  <div className="validation-list">
-                    {validationRows.map((row) => (
-                      <div className="validation-item" key={row.label}>
-                        <span className={`validation-item-icon ${row.pass ? "pass" : "fail"}`}>
-                          <CheckIcon aria-hidden="true" />
-                        </span>
-                        <span className="validation-item-label">{row.label}</span>
-                        <span className={`validation-item-result ${row.pass ? "pass" : "fail"}`}>
-                          {row.result}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </CardBody>
             </Card>
           )}
@@ -414,7 +461,9 @@ function ModelDetailContent({
                       {artifact.fileName} · {formatBytes(artifact.sizeBytes)}
                     </div>
                   </div>
-                  <span className="text-xs text-muted text-mono">{formatBytes(artifact.sizeBytes)}</span>
+                  {product && repository.artifactUrl ? <a className="btn btn-ghost btn-sm"
+                    href={repository.artifactUrl(model.modelId, artifact.artifactId, true)} download={artifact.fileName}
+                    aria-label={`下载 ${artifact.fileName}`}>下载</a> : <span className="text-xs text-muted text-mono">{formatBytes(artifact.sizeBytes)}</span>}
                 </div>
               ))}
             </div>
@@ -424,7 +473,18 @@ function ModelDetailContent({
 
       {model.reviewStatus === "APPROVED" && (
         <InlineNotice tone="success" className="mt-6" title="审核通过">
-          该模型已通过人工审核，为当前正式模型。可用于生成成本测算报告。
+          该模型已通过人工审核。{model.isCurrentApproved ? "为当前正式模型。" : "为历史正式模型。"}
+          {product && !detail.geometry ? "尚无可信模型体积，暂不能生成成本测算报告。" : model.isCurrentApproved ? "可用于生成成本测算报告。" : ""}
+          {canEstimateCost && (
+            <div className="mt-2">
+              <Link
+                className="btn btn-secondary btn-sm"
+                to={`/drawings/${model.drawingId}/revisions/${model.revisionId}/costs/new`}
+              >
+                生成成本测算报告
+              </Link>
+            </div>
+          )}
         </InlineNotice>
       )}
 
@@ -435,7 +495,7 @@ function ModelDetailContent({
               key={review.reviewId}
               tone={review.result === "APPROVED" ? "success" : "error"}
               className="mt-2"
-              title={`${review.result === "APPROVED" ? "审核通过" : "已退回"} · ${review.reviewerId}`}
+              title={`${review.result === "APPROVED" ? "审核通过" : "已退回"} · ${reviewerDisplayName(review.reviewerId)}`}
             >
               {review.comment !== null
                 ? `退回原因：${review.comment} · ${formatRelativeTime(review.createdAt, now)}`

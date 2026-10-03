@@ -1,14 +1,17 @@
-import { Card, CardBody, CardHeader, CardTitle, EmptyState } from "@swpanel/ui";
+import { Button, Card, CardBody, CardHeader, CardTitle, EmptyState } from "@swpanel/ui";
 import { Link, Navigate, useParams } from "react-router-dom";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import type { ModelListItemView } from "@swpanel/contracts";
 
 import { useRepository } from "../features/repository-provider.js";
-import { useDrawingRepository, useDrawingQuery } from "../features/bridge-repository/drawing-repository-provider.js";
+import { useDrawingRepository, useDrawingQuery, useDrawingInvalidate } from "../features/bridge-repository/drawing-repository-provider.js";
 import { isNotFoundError } from "../features/bridge-repository/drawing-repository.js";
-import { useModelDetailQuery } from "../features/model-repository/model-repository-provider.js";
+import { useModelDetailQuery, useModelRepository, useModelInvalidate } from "../features/model-repository/model-repository-provider.js";
+import { useCostInvalidate } from "../features/cost-repository/index.js";
+import { BusinessDeletionDialog } from "../features/deletion/BusinessDeletionDialog.js";
+import { useOptionalNotifications } from "../features/notifications/notification-context.js";
 import { resolveDrawingId, resolveRevisionId, revisionLabelOrId } from "../features/ids.js";
 import { DrawingWorkspace } from "../features/drawing/DrawingWorkspace.js";
 import { QueryErrorState, QueryLoadingState } from "../features/drawing/DrawingQueryStates.js";
@@ -59,6 +62,7 @@ function MockDrawingModelsPage({ now }: { readonly now: Date }): React.JSX.Eleme
 
   const detail = repository.getRevisionDetail(drawingId, revisionId);
   const drawingDetail = repository.getDrawingDetail(drawingId);
+  const runLabelFor = (runId: string): string | undefined => repository.getRun(runId)?.number;
 
   const models = [...detail.models].sort((a, b) => b.generatedAt.localeCompare(a.generatedAt));
   const rejectionCommentFor = (modelId: string): string | null =>
@@ -100,6 +104,7 @@ function MockDrawingModelsPage({ now }: { readonly now: Date }): React.JSX.Eleme
                     model={model}
                     now={now}
                     rejectionComment={rejectionCommentFor(model.modelId)}
+                    {...optionalRunLabel(runLabelFor(model.runId))}
                   />
                 ))}
               </div>
@@ -136,7 +141,7 @@ function ProductDrawingModelsPage({ now }: { readonly now: Date }): React.JSX.El
   const shell = (children: React.ReactNode): React.JSX.Element => (
     <div className="page-content wide" data-route-id="drawing-models">
       <div className="section section-tight">
-        <h1 className="page-header-title">Drawing Workspace · 模型</h1>
+        <h1 className="page-header-title">图纸 · 模型</h1>
       </div>
       {children}
     </div>
@@ -234,6 +239,9 @@ function ProductDrawingModelsPage({ now }: { readonly now: Date }): React.JSX.El
                     revisionId={revisionId}
                     model={model}
                     now={now}
+                    {...optionalRunLabel(
+                      revisionDetail.runs.find((run) => run.runId === model.runId)?.runLabel
+                    )}
                   />
                 ))}
               </div>
@@ -250,25 +258,48 @@ function BridgeModelCard({
   drawingId,
   revisionId,
   model,
-  now
+  now,
+  runLabel
 }: {
   readonly drawingId: string;
   readonly revisionId: string;
   readonly model: ModelListItemView;
   readonly now: Date;
+  readonly runLabel?: string;
 }): React.JSX.Element {
   const detailQuery = useModelDetailQuery(model.modelId);
+  const repository = useModelRepository();
+  const invalidateDrawing = useDrawingInvalidate();
+  const invalidateModel = useModelInvalidate();
+  const invalidateCost = useCostInvalidate();
+  const notifications = useOptionalNotifications();
+  const [deleting, setDeleting] = useState(false);
+  const preview = detailQuery.data?.artifacts.find(artifact => artifact.kind === "PREVIEW");
+  const imageUrl = preview ? repository.artifactUrl?.(model.modelId, preview.artifactId) : undefined;
   const rejectionComment =
     detailQuery.data?.reviews.find((review) => review.result === "REJECTED")?.comment ?? null;
   return (
-    <ModelCard
+    <div><ModelCard
       drawingId={drawingId}
       revisionId={revisionId}
       model={model}
       now={now}
       rejectionComment={rejectionComment}
+      placeholder={false}
+      {...optionalRunLabel(runLabel)}
+      {...(imageUrl === undefined ? {} : { imageUrl })}
     />
+    {repository.deleteObject && <Button variant="ghost" size="sm" onClick={() => setDeleting(true)}>删除模型 {model.modelLabel}</Button>}
+    {deleting && <BusinessDeletionDialog repository={repository} id={model.modelId} label={`模型 ${model.modelLabel}`} onCancel={() => setDeleting(false)} onDeleted={warnings => {
+      setDeleting(false); invalidateDrawing(); invalidateModel(); invalidateCost();
+      notifications?.addNotification({ title: "模型已删除", tone: warnings.length ? "warning" : "success", ...(warnings.length ? { message: warnings.join(" ") } : {}) });
+    }} />}</div>
   );
+}
+
+/** Spreads `runLabel` only when known (exactOptionalPropertyTypes-safe). */
+function optionalRunLabel(runLabel: string | undefined): { runLabel?: string } {
+  return runLabel === undefined ? {} : { runLabel };
 }
 
 export default DrawingModelsPage;

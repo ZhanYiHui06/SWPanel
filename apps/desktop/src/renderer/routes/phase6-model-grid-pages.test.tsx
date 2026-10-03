@@ -111,7 +111,7 @@ describe("Drawing Workspace · 模型 (product mode)", () => {
     renderProduct([MODELS_ROUTE], fake, `/drawings/${MAIN_DRAWING}/revisions/${MAIN_REVISION}/models`);
 
     expect(await screen.findByText("版本模型加载失败")).toBeInTheDocument();
-    expect(screen.getByText(/暂时不可用/)).toBeInTheDocument();
+    expect(screen.getAllByText(/未连接到 SWPanel 服务|暂时不可用/).length).toBeGreaterThanOrEqual(1);
   });
 });
 

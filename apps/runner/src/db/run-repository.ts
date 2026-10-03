@@ -244,17 +244,19 @@ export class RunRepository {
       // The snapshot freezes the Memory visible at the creation moment: Facts
       // and Feedback recorded strictly after the snapshot instant are
       // excluded. Causality compares NUMERIC epochs (legacy Memory rows may
-      // store non-canonical timestamps), never raw string ordering.
+      // store non-canonical timestamps), never raw string ordering. A row whose
+      // timestamp cannot be parsed is never PROVEN to be later, so it is kept:
+      // silently dropping memory is worse than including it (BE-03).
       const snapshot: RunInputSnapshot = {
         drawingId: revision.drawingId,
         revisionId: revision.id,
         originalFileRef: revision.sourceFile.relativePath,
         revisionFacts: this.store
           .listRevisionFacts(input.revisionId)
-          .filter((fact) => Date.parse(fact.createdAt) <= createdAtMs),
+          .filter((fact) => !(Date.parse(fact.createdAt) > createdAtMs)),
         modelingFeedback: this.store
           .listModelingFeedback(input.revisionId)
-          .filter((feedback) => Date.parse(feedback.createdAt) <= createdAtMs),
+          .filter((feedback) => !(Date.parse(feedback.createdAt) > createdAtMs)),
         promptTemplateVersion: input.profile.promptTemplateVersion,
         skill: { name: input.profile.skill.name, sha256: input.profile.skill.sha256 },
         agentConfigId: input.profile.agentConfigId,
@@ -363,6 +365,25 @@ export class RunRepository {
       ...(validationSummary === undefined ? {} : { validationSummary }),
       ...(row.build_report_summary === null ? {} : { buildReportSummary: row.build_report_summary }),
       artifactIds: artifactRows.map((artifact) => artifact.id)
+    };
+  }
+
+  /** Identity-bound file metadata; paths are never accepted from the client. */
+  getModelArtifact(modelId: string, artifactId: string): {
+    id: string; runId: string; kind: string; fileName: string;
+    relativePath: string; sizeBytes: number; sha256: string;
+  } | null {
+    assertSafeIdToken("modelId", modelId);
+    assertSafeIdToken("artifactId", artifactId);
+    const row = this.db.prepare(
+      "SELECT a.id, a.run_id AS runId, a.kind, a.file_name AS fileName, " +
+      "a.relative_path AS relativePath, a.size_bytes AS sizeBytes, a.sha256 " +
+      "FROM artifacts a JOIN models m ON m.id = a.model_id AND m.run_id = a.run_id " +
+      "WHERE a.model_id = ? AND a.id = ?"
+    ).get(modelId, artifactId);
+    return row === undefined ? null : row as {
+      id: string; runId: string; kind: string; fileName: string;
+      relativePath: string; sizeBytes: number; sha256: string;
     };
   }
 
@@ -558,7 +579,7 @@ export class RunRepository {
       .prepare(
         "SELECT m.id AS model_id, m.number AS model_number, " +
           "d.id AS drawing_id, d.drawing_number AS drawing_number, " +
-          "r.sequence AS revision_sequence " +
+          "r.id AS revision_id, r.sequence AS revision_sequence " +
           "FROM models m " +
           "JOIN drawings d ON d.id = m.drawing_id " +
           "JOIN drawing_revisions r ON r.id = m.revision_id " +
@@ -570,14 +591,53 @@ export class RunRepository {
       model_number: string;
       drawing_id: string;
       drawing_number: string;
+      revision_id: string;
       revision_sequence: number;
     }>;
     return rows.map((row) => ({
       drawingId: row.drawing_id,
       drawingNumber: row.drawing_number,
       revisionLabel: revisionLabel(row.revision_sequence),
+      revisionId: row.revision_id,
       modelId: row.model_id,
       modelLabel: row.model_number
+    }));
+  }
+
+  /**
+   * Dashboard pending-clarification items: every OPEN Clarification Request
+   * with its Drawing, Revision, Run and open question count, oldest first.
+   * Never truncated; the UI decides how many to show.
+   */
+  listPendingClarificationItems(): WorkspaceDashboardView["pendingClarifications"][number][] {
+    const rows = this.db
+      .prepare(
+        "SELECT c.id AS request_id, run.id AS run_id, run.number AS run_number, " +
+          "d.id AS drawing_id, d.drawing_number AS drawing_number, " +
+          "rev.sequence AS revision_sequence, " +
+          "(SELECT COUNT(*) FROM clarification_questions q WHERE q.request_id = c.id) AS question_count " +
+          "FROM clarification_requests c " +
+          "JOIN runs run ON run.id = c.run_id " +
+          "JOIN drawings d ON d.id = run.drawing_id " +
+          "JOIN drawing_revisions rev ON rev.id = c.revision_id " +
+          "WHERE c.status = 'OPEN' " +
+          "ORDER BY c.created_at ASC, c.id ASC"
+      )
+      .all() as unknown as Array<{
+      run_id: string;
+      run_number: string;
+      drawing_id: string;
+      drawing_number: string;
+      revision_sequence: number;
+      question_count: number;
+    }>;
+    return rows.map((row) => ({
+      drawingId: row.drawing_id,
+      drawingNumber: row.drawing_number,
+      revisionLabel: revisionLabel(row.revision_sequence),
+      runId: row.run_id,
+      runLabel: row.run_number,
+      openQuestionCount: row.question_count
     }));
   }
 
@@ -1384,6 +1444,8 @@ export class RunRepository {
           this.store.updateCurrentApprovedModelPointer(revisionId, null, new Date().toISOString());
         }
         this.db.prepare("DELETE FROM model_reviews WHERE model_id = ?").run(model.id);
+        this.db.prepare("DELETE FROM cost_reports WHERE model_id = ?").run(model.id);
+        this.db.prepare("UPDATE modeling_feedback SET model_id=NULL,review_id=NULL WHERE model_id=?").run(model.id);
       }
       // Artifact rows are not FK-bound to the model, so the run-scoped delete
       // is a safety net for rows recorded without a model of their own.

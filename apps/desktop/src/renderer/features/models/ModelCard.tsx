@@ -5,6 +5,7 @@ import type { ModelListItemView } from "@swpanel/contracts";
 
 import { formatRelativeTime } from "../format.js";
 import { modelStatusBadge, modelStatusLabel } from "../status.js";
+import { shortId } from "./identifiers.js";
 import { ModelPreview } from "./ModelPreview.js";
 
 export interface ModelCardProps {
@@ -14,6 +15,10 @@ export interface ModelCardProps {
   readonly now?: Date;
   /** Rejection reason of the latest REJECTED review (mock or bridge detail). */
   readonly rejectionComment?: string | null;
+  readonly imageUrl?: string;
+  readonly placeholder?: boolean;
+  /** Business label of the source Run (R05); falls back to a short id. */
+  readonly runLabel?: string;
 }
 
 function isCurrentBadge(model: ModelListItemView): "当前正式模型" | "历史正式模型" | null {
@@ -32,7 +37,10 @@ export function ModelCard({
   revisionId,
   model,
   now,
-  rejectionComment
+  rejectionComment,
+  imageUrl,
+  placeholder,
+  runLabel
 }: ModelCardProps): React.JSX.Element {
   const currentMarker = isCurrentBadge(model);
 
@@ -49,7 +57,7 @@ export function ModelCard({
             </StatusBadge>
           )}
         </div>
-        <ModelPreview modelLabel={model.modelLabel} size={100} />
+        <ModelPreview modelLabel={model.modelLabel} size={100} {...(imageUrl === undefined ? {} : { imageUrl })} {...(placeholder === undefined ? {} : { placeholder })} />
       </div>
       <div className="model-card-body">
         <div className="model-card-title">
@@ -59,7 +67,7 @@ export function ModelCard({
           </StatusBadge>
         </div>
         <div className="model-card-meta">
-          <span>来源 {model.runId.replace(/^run-/, "").toUpperCase()}</span>
+          <span>来源 {runLabel ?? shortId(model.runId)}</span>
           <span aria-hidden="true">·</span>
           <span>{formatRelativeTime(model.generatedAt, now)}</span>
         </div>

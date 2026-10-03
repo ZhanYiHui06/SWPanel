@@ -9,6 +9,7 @@
  */
 
 import { useDrawingQuery, useDrawingRepository } from "../bridge-repository/drawing-repository-provider.js";
+import { useModelDetailQuery } from "../model-repository/model-repository-provider.js";
 
 export interface RunIdentity {
   readonly ready: boolean;
@@ -31,4 +32,14 @@ export function useRunIdentity(drawingId: string, revisionId: string): RunIdenti
     drawingName: detail?.drawing.name ?? "",
     revisionLabel: revision?.revisionLabel ?? revisionId
   };
+}
+
+/**
+ * Business label (e.g. "M03") of a published Model, resolved through the cached
+ * Model detail query. Returns null while loading / unknown: callers must never
+ * fall back to showing the raw id.
+ */
+export function useModelLabel(modelId: string | null | undefined): string | null {
+  const query = useModelDetailQuery(modelId ?? null);
+  return query.data?.model.modelLabel ?? null;
 }

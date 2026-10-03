@@ -4,6 +4,7 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import type { ClarificationAnswer, ClarificationAnswerValue } from "@swpanel/domain";
 import type { ClarificationView } from "@swpanel/contracts";
 
+import { describeError } from "../error-messages.js";
 import { formatRelativeTime } from "../format.js";
 
 /** Stable reviewer identity snapshot for the mock (trusted current user). */
@@ -30,6 +31,17 @@ export interface ClarificationFormProps {
   readonly onRestartModeling?: () => void;
   /** Disables the restart action while the new Run is being created. */
   readonly restarting?: boolean;
+}
+
+/** A positive plain decimal such as `85` or `12.5` (no sign, hex or exponent). */
+const POSITIVE_DECIMAL = /^\d+(\.\d+)?$/;
+
+/** Validates a dimension answer; returns a Chinese message or null when valid. */
+export function validateDimensionInput(raw: string): string | null {
+  const value = raw.trim();
+  if (value === "") return "请填写数值";
+  if (!POSITIVE_DECIMAL.test(value) || !(Number(value) > 0)) return "请输入大于 0 的数字，例如 85 或 12.5";
+  return null;
 }
 
 function defaultUnit(question: ViewQuestion, unit: string | null): string {
@@ -103,14 +115,12 @@ export function ClarificationForm({
     const nextErrors: Record<string, string> = {};
     for (const question of clarification.questions) {
       if (question.type === "dimension") {
-        const raw = (dimensionValues[question.questionId] ?? "").trim();
-        if (raw === "" || !Number.isFinite(Number(raw))) {
-          nextErrors[question.questionId] = "请输入有效的数值";
-        }
+        const problem = validateDimensionInput(dimensionValues[question.questionId] ?? "");
+        if (problem !== null) nextErrors[question.questionId] = problem;
       } else if (question.type === "text") {
         const value = (textValues[question.questionId] ?? "").trim();
         if (value === "") {
-          nextErrors[question.questionId] = "请填写此项";
+          nextErrors[question.questionId] = "请填写回答";
         }
       } else if (question.type === "choice") {
         const value = choiceValues[question.questionId] ?? "";
@@ -133,7 +143,7 @@ export function ClarificationForm({
       if (question.type === "dimension") {
         const value: ClarificationAnswerValue = {
           kind: "dimension",
-          value: Number(dimensionValues[question.questionId]),
+          value: Number((dimensionValues[question.questionId] ?? "").trim()),
           unit: unitValues[question.questionId] ?? defaultUnit(question, question.unit)
         };
         return { ...base, value };
@@ -153,7 +163,7 @@ export function ClarificationForm({
       },
       (error: unknown) => {
         setSubmitting(false);
-        setSubmitError(error instanceof Error ? error.message : String(error));
+        setSubmitError(describeError(error).message);
       }
     );
   }
@@ -184,8 +194,8 @@ export function ClarificationForm({
       )}
 
       {submitError !== null && (
-        <InlineNotice tone="error" className="mb-6" title="提交失败">
-          {submitError} 请重试。
+        <InlineNotice tone="error" className="mb-6" title="提交失败" role="alert">
+          {submitError}
         </InlineNotice>
       )}
 
@@ -212,7 +222,7 @@ export function ClarificationForm({
             ) : question.type === "dimension" ? (
               <FormField
                 label="数值"
-                {...(hint !== null ? { hint: `请输入${hint}的数值（示例：${hint}）` } : {})}
+                {...(hint !== null ? { hint: `示例：${hint}` } : {})}
                 {...(error !== undefined ? { error } : {})}
               >
                 <InputGroup className="input-w-md">
@@ -221,26 +231,28 @@ export function ClarificationForm({
                     placeholder="输入数值"
                     value={dimensionValues[question.questionId] ?? ""}
                     onValueChange={(value) => setValue(setDimensionValues, question.questionId, value)}
+                    invalid={error !== undefined}
                     inputProps={{ "aria-label": question.question, type: "text", inputMode: "decimal" }}
                   />
                   <UnitSelect
                     value={unitValues[question.questionId] ?? defaultUnit(question, question.unit)}
                     onValueChange={(unit) => setValue(setUnitValues, question.questionId, unit)}
-                    options={[question.unit ?? "mm", "cm", "m"].map((unit) => ({ label: unit, value: unit }))}
-                    aria-label={`${question.question} 单位`}
+                    options={Array.from(new Set([question.unit ?? "mm", "cm", "m"])).map((unit) => ({ label: unit, value: unit }))}
+                    selectProps={{ "aria-label": `${question.question} 单位` }}
                   />
                 </InputGroup>
               </FormField>
             ) : question.type === "text" ? (
               <FormField
-                label="描述"
-                {...(hint !== null ? { hint: `请描述位置（示例：${hint}）` } : {})}
+                label="回答"
+                {...(hint !== null ? { hint: `示例：${hint}` } : {})}
                 {...(error !== undefined ? { error } : {})}
               >
                 <TextInput
-                  placeholder="请描述位置"
+                  placeholder="请输入回答"
                   value={textValues[question.questionId] ?? ""}
                   onValueChange={(value) => setValue(setTextValues, question.questionId, value)}
+                  invalid={error !== undefined}
                   inputProps={{ "aria-label": question.question }}
                 />
               </FormField>
@@ -251,6 +263,7 @@ export function ClarificationForm({
                   className="input-w-md"
                   value={choiceValues[question.questionId] ?? ""}
                   onValueChange={(value) => setValue(setChoiceValues, question.questionId, value)}
+                  invalid={error !== undefined}
                   options={(question.options ?? []).map((option) => ({ label: option.label, value: option.id }))}
                   selectProps={{ "aria-label": question.question }}
                 />

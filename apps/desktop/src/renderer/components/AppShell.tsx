@@ -13,6 +13,7 @@ import {
 import { NavLink, Outlet, matchPath, useLocation } from "react-router-dom";
 
 import { PRODUCT_ROUTES } from "../app/routes.js";
+import { repositoryModeLabel, resolveRepositoryMode } from "../features/repository-mode.js";
 import { useNotifications } from "../features/notifications/notification-context.js";
 import { NotificationDrawer } from "./NotificationDrawer.js";
 
@@ -85,6 +86,7 @@ function AppSidebar(): React.JSX.Element {
 function AppTopbar(): React.JSX.Element {
   const { pathname } = useLocation();
   const { unreadCount, toggleDrawer } = useNotifications();
+  const runtimeLabel = repositoryModeLabel(resolveRepositoryMode());
   const currentRoute = PRODUCT_ROUTES.find(
     (route) => matchPath({ path: route.path, end: true }, pathname) !== null
   );
@@ -99,18 +101,16 @@ function AppTopbar(): React.JSX.Element {
         </div>
       </div>
       <div className="topbar-right">
-        <span className="runtime-label">
-          {window.swpanel === undefined ? "浏览器预览" : `Electron ${window.swpanel.metadata.versions.electron}`}
-        </span>
+        {runtimeLabel !== "" && <span className="runtime-label">{runtimeLabel}</span>}
         <IconButton
-          label="通知"
+          label={unreadCount > 0 ? `通知，${unreadCount} 条未读` : "通知"}
           onClick={toggleDrawer}
           buttonProps={{ "aria-haspopup": "dialog" }}
         >
           <span className="icon-button-badge-wrap">
             <BellIcon aria-hidden="true" />
             {unreadCount > 0 && (
-              <span className="icon-button-badge" aria-label={`${unreadCount} 条未读通知`}>
+              <span className="icon-button-badge" aria-hidden="true">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}

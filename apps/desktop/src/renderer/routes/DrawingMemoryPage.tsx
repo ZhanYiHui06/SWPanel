@@ -1,4 +1,4 @@
-import { Button, Card, CardBody, CardHeader, CardTitle, CloseIcon, EmptyState, FormField, InlineNotice, Select, TextInput, Textarea } from "@swpanel/ui";
+import { Button, Card, CardBody, CardHeader, CardTitle, CloseIcon, Dialog, EmptyState, FormField, InlineNotice, Select, TextInput, Textarea } from "@swpanel/ui";
 import type { RevisionFactSource } from "@swpanel/domain";
 import { useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
@@ -12,11 +12,19 @@ import {
 } from "../features/bridge-repository/drawing-repository-provider.js";
 import {
   isNotFoundError,
-  toDrawingRepositoryError,
   type DrawingRepository
 } from "../features/bridge-repository/drawing-repository.js";
 import { QueryErrorState, QueryLoadingState } from "../features/drawing/DrawingQueryStates.js";
-import { factSourceLabel, formatSmartDate } from "../features/presentation.js";
+import { describeError } from "../features/error-messages.js";
+import { formatRelativeTime } from "../features/format.js";
+import { factSourceLabel } from "../features/presentation.js";
+
+/** Display value of a fact: appends the unit unless the value already ends with it. */
+export function formatFactValue(value: string, unit: string | undefined): string {
+  if (unit === undefined || unit.trim().length === 0) return value;
+  const trimmedUnit = unit.trim();
+  return value.trim().toLowerCase().endsWith(trimmedUnit.toLowerCase()) ? value : `${value} ${trimmedUnit}`;
+}
 
 export interface DrawingMemoryPageProps {
   readonly now?: Date;
@@ -81,55 +89,53 @@ export function AddFactDialog({
       await repository.addRevisionFact({ ...payload, clientIntentId });
       onAdded();
     } catch (caught) {
-      setError(toDrawingRepositoryError(caught).message);
+      setError(describeError(caught).message);
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="dialog-overlay" role="presentation">
-      <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="add-fact-dialog-title">
-        <div className="dialog-header">
-          <div id="add-fact-dialog-title" className="dialog-title">添加工程事实</div>
-        </div>
-        <div className="dialog-body">
-          <FormField label="字段名称" htmlFor="add-fact-field" required>
-            <TextInput value={field} onValueChange={setField} placeholder="例如 中心孔深度" inputProps={{ id: "add-fact-field" }} />
-          </FormField>
-          <FormField label="值" htmlFor="add-fact-value" required>
-            <TextInput value={value} onValueChange={setValue} mono placeholder="例如 85 mm" inputProps={{ id: "add-fact-value" }} />
-          </FormField>
-          <FormField label="单位" htmlFor="add-fact-unit" hint="可选，例如 mm / MPa / kg">
-            <TextInput value={unit} onValueChange={setUnit} mono placeholder="选填" inputProps={{ id: "add-fact-unit" }} />
-          </FormField>
-          <FormField label="来源" htmlFor="add-fact-source">
-            <Select
-              value={source}
-              onValueChange={(next) => setSource(next as RevisionFactSource)}
-              options={[
-                { value: "USER_SUPPLEMENT", label: "用户补充" },
-                { value: "DRAWING_CONFIRMED", label: "图纸确认" },
-                { value: "CLARIFICATION", label: "补充信息确认" }
-              ]}
-              selectProps={{ id: "add-fact-source" }}
-            />
-          </FormField>
-          {error !== null && (
-            <InlineNotice tone="error" title="无法添加工程事实" className="mt-4">
-              {error}
-            </InlineNotice>
-          )}
-        </div>
-        <div className="dialog-footer">
-          <Button variant="ghost" onClick={onCancel} disabled={submitting}>
-            <CloseIcon aria-hidden="true" />取消
-          </Button>
-          <Button variant="primary" onClick={() => void submit()} disabled={submitting}>
-            {submitting ? "正在保存…" : "保存事实"}
-          </Button>
-        </div>
-      </section>
-    </div>
+    <Dialog labelledBy="add-fact-dialog-title" onClose={onCancel} dismissible={!submitting}>
+      <div className="dialog-header">
+        <h2 id="add-fact-dialog-title" className="dialog-title">添加工程事实</h2>
+      </div>
+      <div className="dialog-body">
+        <FormField label="字段名称" htmlFor="add-fact-field" required>
+          <TextInput value={field} onValueChange={setField} placeholder="例如 中心孔深度" inputProps={{ id: "add-fact-field" }} />
+        </FormField>
+        <FormField label="值" htmlFor="add-fact-value" required>
+          <TextInput value={value} onValueChange={setValue} mono placeholder="例如 85（单位在下方单独填写）" inputProps={{ id: "add-fact-value" }} />
+        </FormField>
+        <FormField label="单位" htmlFor="add-fact-unit" hint="可选，例如 mm / MPa / kg；会显示在值的后面">
+          <TextInput value={unit} onValueChange={setUnit} mono placeholder="选填" inputProps={{ id: "add-fact-unit" }} />
+        </FormField>
+        <FormField label="来源" htmlFor="add-fact-source">
+          <Select
+            value={source}
+            onValueChange={(next) => setSource(next as RevisionFactSource)}
+            options={[
+              { value: "USER_SUPPLEMENT", label: "用户补充" },
+              { value: "DRAWING_CONFIRMED", label: "图纸确认" },
+              { value: "CLARIFICATION", label: "补充信息确认" }
+            ]}
+            selectProps={{ id: "add-fact-source" }}
+          />
+        </FormField>
+        {error !== null && (
+          <InlineNotice tone="error" title="无法添加工程事实" className="mt-4">
+            {error}
+          </InlineNotice>
+        )}
+      </div>
+      <div className="dialog-footer">
+        <Button variant="ghost" onClick={onCancel} disabled={submitting}>
+          <CloseIcon aria-hidden="true" />取消
+        </Button>
+        <Button variant="primary" onClick={() => void submit()} disabled={submitting}>
+          {submitting ? "正在保存…" : "保存事实"}
+        </Button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -175,43 +181,41 @@ export function AddFeedbackDialog({
       await repository.addModelingFeedback({ ...payload, clientIntentId });
       onAdded();
     } catch (caught) {
-      setError(toDrawingRepositoryError(caught).message);
+      setError(describeError(caught).message);
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="dialog-overlay" role="presentation">
-      <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="add-feedback-dialog-title">
-        <div className="dialog-header">
-          <div id="add-feedback-dialog-title" className="dialog-title">添加建模反馈</div>
-        </div>
-        <div className="dialog-body">
-          <FormField label="反馈内容" htmlFor="add-feedback-content" required hint="记录本版本建模时需要避免的错误或注意事项">
-            <Textarea
-              value={content}
-              onValueChange={setContent}
-              rows={4}
-              placeholder="例如：右侧台阶直径容易识别错误，请按剖面图 A-A 校核。"
-              textareaProps={{ id: "add-feedback-content" }}
-            />
-          </FormField>
-          {error !== null && (
-            <InlineNotice tone="error" title="无法添加建模反馈" className="mt-4">
-              {error}
-            </InlineNotice>
-          )}
-        </div>
-        <div className="dialog-footer">
-          <Button variant="ghost" onClick={onCancel} disabled={submitting}>
-            <CloseIcon aria-hidden="true" />取消
-          </Button>
-          <Button variant="primary" onClick={() => void submit()} disabled={submitting}>
-            {submitting ? "正在保存…" : "保存反馈"}
-          </Button>
-        </div>
-      </section>
-    </div>
+    <Dialog labelledBy="add-feedback-dialog-title" onClose={onCancel} dismissible={!submitting}>
+      <div className="dialog-header">
+        <h2 id="add-feedback-dialog-title" className="dialog-title">添加建模反馈</h2>
+      </div>
+      <div className="dialog-body">
+        <FormField label="反馈内容" htmlFor="add-feedback-content" required hint="记录本版本建模时需要避免的错误或注意事项">
+          <Textarea
+            value={content}
+            onValueChange={setContent}
+            rows={4}
+            placeholder="例如：右侧台阶直径容易识别错误，请按剖面图 A-A 校核。"
+            textareaProps={{ id: "add-feedback-content" }}
+          />
+        </FormField>
+        {error !== null && (
+          <InlineNotice tone="error" title="无法添加建模反馈" className="mt-4">
+            {error}
+          </InlineNotice>
+        )}
+      </div>
+      <div className="dialog-footer">
+        <Button variant="ghost" onClick={onCancel} disabled={submitting}>
+          <CloseIcon aria-hidden="true" />取消
+        </Button>
+        <Button variant="primary" onClick={() => void submit()} disabled={submitting}>
+          {submitting ? "正在保存…" : "保存反馈"}
+        </Button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -326,7 +330,7 @@ export function DrawingMemoryPage({ now = new Date(), drawingRepository }: Drawi
         revisionLabelById={revisionLabelById}
       >
         {notice !== null && (
-          <InlineNotice tone="success" title="已保存" className="mb-6">
+          <InlineNotice tone="success" title="已保存" className="mb-6" role="status">
             {notice}
           </InlineNotice>
         )}
@@ -353,7 +357,7 @@ export function DrawingMemoryPage({ now = new Date(), drawingRepository }: Drawi
                   <div className="memory-entry" key={fact.id}>
                     <div className="memory-entry-label">{fact.field}</div>
                     <div className="memory-entry-value">
-                      {fact.value}
+                      {formatFactValue(fact.value, fact.unit)}
                       <div className="memory-entry-source">
                         <span>来源：{factSourceLabel(fact.source)}</span>
                         {sourceRun !== undefined && (
@@ -388,7 +392,7 @@ export function DrawingMemoryPage({ now = new Date(), drawingRepository }: Drawi
                 const model = entry.modelId !== undefined && mock !== null ? mock.getModel(entry.modelId) : undefined;
                 const label =
                   model?.number ??
-                  (entry.source === "USER_SUPPLEMENT" ? "用户补充" : (entry.modelId ?? entry.id));
+                  (entry.source === "USER_SUPPLEMENT" ? "用户补充" : "模型审核退回");
                 return (
                   <div className="memory-entry" key={entry.id}>
                     <div className="memory-entry-label text-mono">
@@ -399,7 +403,7 @@ export function DrawingMemoryPage({ now = new Date(), drawingRepository }: Drawi
                       <div className="memory-entry-source">
                         <span>来源：{entry.source === "MODEL_REVIEW_REJECTED" ? "模型审核退回" : "用户补充"}</span>
                         <span aria-hidden="true">·</span>
-                        <span>{formatSmartDate(entry.createdAt, now)}</span>
+                        <span>{formatRelativeTime(entry.createdAt, now)}</span>
                       </div>
                     </div>
                   </div>

@@ -3,18 +3,20 @@ import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
 import { useMemo, useRef, useState } from "react";
 
-import { isRunTerminal, type RunStatus } from "@swpanel/domain";
+import { isRunTerminal, RUN_STAGE_LABELS, type RunStatus } from "@swpanel/domain";
 
 import { useRepository } from "../features/repository-provider.js";
 import { useDrawingRepository } from "../features/bridge-repository/drawing-repository-provider.js";
 import { useRunEventStream, useRunInvalidate, useRunQuery, useRunRepository } from "../features/run-repository/run-repository-provider.js";
 import { MockRunRepository } from "../features/run-repository/mock-run-repository.js";
-import { useRunIdentity } from "../features/run-repository/run-display.js";
-import { toRunRepositoryError } from "../features/run-repository/run-repository.js";
+import { useModelLabel, useRunIdentity } from "../features/run-repository/run-display.js";
+import { describeError } from "../features/error-messages.js";
 import { cancelOutcomeNotice, type CancelNotice } from "../features/runs/cancel-outcome.js";
 import { resolveRunId, revisionLabelOrId } from "../features/ids.js";
 import { formatRelativeTime } from "../features/format.js";
 import { RunStatusBadge } from "../features/runs/RunStatusBadge.js";
+import { CancelRunDialog } from "../features/runs/CancelRunDialog.js";
+import { runEventTypeLabel, runFailureSummary } from "../features/runs/failure-presentation.js";
 import { StageProgress } from "../features/runs/StageProgress.js";
 import { ClarificationForm, MOCK_ANSWERING_USER } from "../features/runs/ClarificationForm.js";
 import { createRunForRevision } from "../features/runs/create-run.js";
@@ -109,6 +111,7 @@ function ProductRunDetailPage({ now }: { readonly now: Date }): React.JSX.Elemen
   const [cancelling, setCancelling] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deleteRunOpen, setDeleteRunOpen] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [notices, setNotices] = useState<readonly CancelNotice[]>([]);
   const nextNoticeId = useRef(1);
 
@@ -133,28 +136,36 @@ function ProductRunDetailPage({ now }: { readonly now: Date }): React.JSX.Elemen
 
   const live = run?.status === "RUNNING";
   const terminal = run !== null && isRunTerminal(run.status as RunStatus);
+  const modelLabel = useModelLabel(run?.modelId ?? null);
 
   async function handleCancel(): Promise<void> {
     if (run === null || cancelling) return; // duplicate submit guard
+    setCancelConfirmOpen(false);
     setCancelling(true);
     try {
       const outcome = await runRepository.cancelRun({ runId: run.runId, reason: "用户主动取消" });
       setNotices((current) => [...current, cancelOutcomeNotice(outcome, run.runLabel, nextNoticeId.current++)]);
       if (outcome.status === "CANCELLED") invalidateRuns();
     } catch (error) {
-      const structured = toRunRepositoryError(error);
       setNotices((current) => [
         ...current,
         {
           id: nextNoticeId.current++,
           tone: "error",
           title: `Run ${run.runLabel} 取消失败`,
-          text: `${structured.code}: ${structured.message}`
+          text: describeError(error).message
         }
       ]);
     } finally {
       setCancelling(false);
     }
+  }
+
+  /** RUNNING Runs need a second confirmation (cancel deletes generated files). */
+  function requestCancel(): void {
+    if (run === null || cancelling) return;
+    if (run.status === "RUNNING") setCancelConfirmOpen(true);
+    else void handleCancel();
   }
 
   async function handleStartNewRun(): Promise<void> {
@@ -169,29 +180,39 @@ function ProductRunDetailPage({ now }: { readonly now: Date }): React.JSX.Elemen
       // Navigate to the fresh Run (a new Run, never a resumed one).
       void navigate(`/runs/${created.id}`);
     } catch (error) {
-      const structured = toRunRepositoryError(error);
       setNotices((current) => [
         ...current,
         {
           id: nextNoticeId.current++,
           tone: "error",
           title: "创建新的 Run 失败",
-          text: `${structured.code}: ${structured.message}`
+          text: describeError(error).message
         }
       ]);
       setCreating(false);
     }
   }
 
+  // While the stream reconnects (or gave up) the last known data stays on
+  // screen; only a banner reports the interruption.
+  const hasData = detail !== null && run !== null;
   const shell = (children: React.ReactNode): React.JSX.Element => (
     <div className="page-content" data-route-id="run-detail">
-      {stream.status === "recovering" && (
-        <InlineNotice tone="warning" className="mb-4" title="正在重新连接任务事件流">
-          与执行服务的事件连接中断，正在重新同步进度（第 {stream.recoveryAttempts} 次尝试）…
+      {hasData && stream.status === "recovering" && (
+        <InlineNotice tone="warning" className="mb-4" title="连接中断，正在重新连接…" role="status">
+          与执行服务的实时连接已中断，页面保留最近一次的进度（第 {stream.recoveryAttempts} 次尝试）。
+        </InlineNotice>
+      )}
+      {hasData && stream.status === "error" && (
+        <InlineNotice tone="error" className="mb-4" title="连接中断，未能重新连接" role="alert">
+          页面显示的是最近一次获取的进度，可能已过期。
+          <div className="mt-4">
+            <Button variant="secondary" size="sm" onClick={() => stream.retry()}>点击重试</Button>
+          </div>
         </InlineNotice>
       )}
       {notices.map((notice) => (
-        <InlineNotice key={notice.id} tone={notice.tone} title={notice.title} className="mb-4">
+        <InlineNotice key={notice.id} tone={notice.tone} title={notice.title} className="mb-4" role={notice.tone === "error" ? "alert" : "status"}>
           {notice.text}
         </InlineNotice>
       ))}
@@ -203,7 +224,7 @@ function ProductRunDetailPage({ now }: { readonly now: Date }): React.JSX.Elemen
     return <Navigate to="/runs" replace />;
   }
 
-  if (stream.status === "loading" || stream.status === "error" || detail === null || run === null) {
+  if (detail === null || run === null) {
     if (stream.status === "error") {
       return shell(
         <QueryErrorState
@@ -233,7 +254,7 @@ function ProductRunDetailPage({ now }: { readonly now: Date }): React.JSX.Elemen
       : run.status === "FAILED" || run.status === "CANCELLED"
         ? "执行中断"
         : run.stage !== null
-          ? run.stage
+          ? (RUN_STAGE_LABELS[run.stage as keyof typeof RUN_STAGE_LABELS] ?? "—")
           : "—";
 
   const canCancel = run.status === "QUEUED" || run.status === "RUNNING";
@@ -262,7 +283,7 @@ function ProductRunDetailPage({ now }: { readonly now: Date }): React.JSX.Elemen
               </Button>
             )}
             {canCancel && (
-              <Button variant="ghost-muted" size="sm" onClick={() => void handleCancel()} disabled={cancelling}>
+              <Button variant="ghost-muted" size="sm" onClick={requestCancel} disabled={cancelling}>
                 {cancelling ? "正在取消…" : "取消任务"}
               </Button>
             )}
@@ -368,8 +389,8 @@ function ProductRunDetailPage({ now }: { readonly now: Date }): React.JSX.Elemen
                   </p>
                 )}
                 {clarificationQuery.status === "error" && (
-                  <InlineNotice tone="error" title="补充信息加载失败">
-                    {clarificationQuery.error?.message ?? "未知错误"}
+                  <InlineNotice tone="error" title="补充信息加载失败" role="alert">
+                    {describeError(clarificationQuery.error).message}
                     <div className="mt-4">
                       <Button variant="secondary" size="sm" onClick={() => clarificationQuery.retry()}>
                         重试
@@ -395,7 +416,7 @@ function ProductRunDetailPage({ now }: { readonly now: Date }): React.JSX.Elemen
                 </InlineNotice>
               ) : (
                 <InlineNotice tone="success" title="Run 已完成">
-                  执行完成并发布模型 {run.modelId.replace(/^model-/, "").toUpperCase()}。
+                  执行完成并发布模型{modelLabel !== null ? ` ${modelLabel}` : ""}。
                   <div className="mt-4">
                     <Link
                       to={`/drawings/${run.drawingId}/revisions/${run.revisionId}/models/${run.modelId}`}
@@ -418,15 +439,14 @@ function ProductRunDetailPage({ now }: { readonly now: Date }): React.JSX.Elemen
           </div>
           <Card>
             <CardBody>
-              <InlineNotice tone="error" title={run.failureMessage ?? "执行失败"}>
-                {run.failureCode !== null && (
-                  <>
-                    失败代码：{run.failureCode}
-                    <br />
-                  </>
-                )}
-                该 Run 已终止。修复后可通过「开始自动建模」发起新的 Run。
+              <InlineNotice tone="error" title={runFailureSummary(run.failureCode)}>
+                该 Run 已终止。处理后可通过「重新自动建模」发起新的 Run。
               </InlineNotice>
+              <details className="text-xs text-muted mt-4" open>
+                <summary>技术详情</summary>
+                {run.failureCode !== null && <div className="text-mono">失败代码：{run.failureCode}</div>}
+                {run.failureMessage !== null && run.failureMessage !== undefined && <div>{run.failureMessage}</div>}
+              </details>
               <div className="mt-4">
                 <Button variant="secondary" size="sm" onClick={() => void handleStartNewRun()} disabled={creating}>
                   {creating ? "正在创建新任务…" : "重新自动建模"}
@@ -489,7 +509,10 @@ function ProductRunDetailPage({ now }: { readonly now: Date }): React.JSX.Elemen
                 {detail.events.map((event) => (
                   <div className="run-detail-stage" key={event.sequence}>
                     <span className="run-detail-stage-num">{event.sequence}</span>
-                    <span className="run-detail-stage-label">{event.type}</span>
+                    <span className="run-detail-stage-label">
+                      {runEventTypeLabel(event.type)}{" "}
+                      <span className="text-xs text-muted text-mono">{event.type}</span>
+                    </span>
                     <span className="run-detail-stage-activity">{formatRelativeTime(event.occurredAt, now)}</span>
                   </div>
                 ))}
@@ -499,6 +522,13 @@ function ProductRunDetailPage({ now }: { readonly now: Date }): React.JSX.Elemen
         </div>
       )}
 
+      {cancelConfirmOpen && (
+        <CancelRunDialog
+          runLabel={run.runLabel}
+          onKeep={() => setCancelConfirmOpen(false)}
+          onConfirm={() => void handleCancel()}
+        />
+      )}
       {deleteRunOpen && run !== null && (
         <DeleteRunDialog
           repository={runRepository}
@@ -581,7 +611,7 @@ export function RunDetailPage({ now = new Date() }: RunDetailPageProps): React.J
       : run.status === "FAILED" || run.status === "CANCELLED"
         ? "执行中断"
         : run.stage !== null
-          ? run.stage
+          ? (RUN_STAGE_LABELS[run.stage as keyof typeof RUN_STAGE_LABELS] ?? "—")
           : "—";
 
   return (
@@ -711,15 +741,14 @@ export function RunDetailPage({ now = new Date() }: RunDetailPageProps): React.J
           </div>
           <Card>
             <CardBody>
-              <InlineNotice tone="error" title={run.failureMessage ?? "执行失败"}>
-                {run.failureCode !== null && (
-                  <>
-                    失败代码：{run.failureCode}
-                    <br />
-                  </>
-                )}
-                该 Run 已终止。修复后可通过「开始自动建模」发起新的 Run。
+              <InlineNotice tone="error" title={runFailureSummary(run.failureCode)}>
+                该 Run 已终止。处理后可通过「重新自动建模」发起新的 Run。
               </InlineNotice>
+              <details className="text-xs text-muted mt-4" open>
+                <summary>技术详情</summary>
+                {run.failureCode !== null && <div className="text-mono">失败代码：{run.failureCode}</div>}
+                {run.failureMessage !== null && run.failureMessage !== undefined && <div>{run.failureMessage}</div>}
+              </details>
             </CardBody>
           </Card>
         </div>
@@ -777,7 +806,10 @@ export function RunDetailPage({ now = new Date() }: RunDetailPageProps): React.J
                 {detail.events.map((event) => (
                   <div className="run-detail-stage" key={event.sequence}>
                     <span className="run-detail-stage-num">{event.sequence}</span>
-                    <span className="run-detail-stage-label">{event.type}</span>
+                    <span className="run-detail-stage-label">
+                      {runEventTypeLabel(event.type)}{" "}
+                      <span className="text-xs text-muted text-mono">{event.type}</span>
+                    </span>
                     <span className="run-detail-stage-activity">{formatRelativeTime(event.occurredAt, now)}</span>
                   </div>
                 ))}

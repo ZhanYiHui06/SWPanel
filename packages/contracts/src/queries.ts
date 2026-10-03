@@ -28,6 +28,22 @@ export interface DrawingListItemView {
   latestRevisionLabel: string | null;
   /** Whether the current Revision has an OPEN Clarification. */
   hasOpenClarification: boolean;
+  /**
+   * Whether the current Revision has a Model awaiting human review
+   * (PENDING_REVIEW). Optional so existing fixtures and older producers stay
+   * valid; absent means "unknown/false".
+   */
+  hasPendingReview?: boolean;
+}
+
+export interface DeletionImpact {
+  kind: "drawing" | "model";
+  id: string;
+  confirmationToken: string;
+  canDelete: boolean;
+  blockingReason: string | null;
+  counts: { revisions: number; runs: number; models: number; reviews: number; costReports: number; artifacts: number; sourceFiles: number };
+  clearsCurrentApproved: boolean;
 }
 
 export interface RevisionListItemView {
@@ -133,6 +149,11 @@ export interface RunDetailView {
 }
 
 export interface ModelDetailView {
+  geometry?: {
+    finishedVolumeM3: number;
+    boundingBoxMm: { length: number; width: number; height: number } | null;
+    sourceArtifactId: string;
+  } | null;
   model: {
     modelId: string;
     modelLabel: string;
@@ -221,6 +242,8 @@ export interface WorkspaceDashboardView {
     drawingId: string;
     drawingNumber: string;
     revisionLabel: string;
+    /** Owning Revision id (for deep links); optional for older producers. */
+    revisionId?: string;
     modelId: string;
     modelLabel: string;
   }[];
@@ -283,6 +306,7 @@ export interface StorageSettingsView {
 }
 
 export type QueryResult =
+  | DeletionImpact
   | DrawingDetailView
   | RevisionDetailView
   | RunDetailView

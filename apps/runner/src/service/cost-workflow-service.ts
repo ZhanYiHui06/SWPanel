@@ -6,12 +6,16 @@ import type {
 import {
   calculateCostEstimate,
   canCreateCostEstimateReport,
-  costReportLabel
+  costReportLabel,
+  MAX_COST_QUANTITY,
+  parseStockSpec
 } from "@swpanel/domain";
 import type { CostReportDetailView, CostReportListItemView } from "@swpanel/contracts";
 
 import { SqliteRepository } from "../db/repository.js";
 import { RunRepository } from "../db/run-repository.js";
+import { generateId } from "../ids.js";
+import type { ModelGeometry } from "../artifacts/model-geometry.js";
 import {
   InvalidArgumentError,
   NotFoundError,
@@ -26,7 +30,8 @@ import {
 export class CostWorkflowService {
   constructor(
     private readonly repository: SqliteRepository,
-    private readonly runs: RunRepository
+    private readonly runs: RunRepository,
+    private readonly geometryOf: (modelId: string) => ModelGeometry | null = () => null
   ) {}
 
   getEffectiveCostData(): CostDataSnapshot {
@@ -76,14 +81,68 @@ export class CostWorkflowService {
         );
       }
 
-      // Compute deterministic result using domain pure calculator
+      const geometry = this.geometryOf(model.id);
+      if (geometry === null) {
+        throw new InvalidArgumentError("MODEL_GEOMETRY_UNAVAILABLE: 已审核模型缺少经过验证的真实成品体积，无法生成成本报告");
+      }
+      if (!Number.isSafeInteger(input.quantity) || input.quantity < 1 || input.quantity > MAX_COST_QUANTITY) {
+        throw new InvalidArgumentError(`Quantity must be a positive integer not greater than ${MAX_COST_QUANTITY}`);
+      }
+      const costData = this.repository.getEffectiveCostData();
+      if (costData.fixedCosts.some((cost) => cost.defaultEnabled &&
+        (!Number.isFinite(cost.amount) || cost.amount < 0 || cost.currency !== "CNY" ||
+        (cost.basis !== "PER_PIECE" && cost.basis !== "PER_BATCH")))) {
+        throw new InvalidArgumentError("Enabled fixed costs require nonnegative CNY amounts and a supported billing basis");
+      }
+      if (costData.allowances.some((definition) => definition.allowances.some((allowance) =>
+        !Number.isFinite(allowance.valueMm) || allowance.valueMm < 0))) {
+        throw new InvalidArgumentError("Company machining allowances must be finite nonnegative millimeters");
+      }
+      const material = costData.materials.find((material) => material.id === input.materialId);
+      if (material === undefined) {
+        throw new InvalidArgumentError("Material is not present in the current company cost data");
+      }
+      if (!Number.isFinite(material.purchasePrice) || material.purchasePrice < 0 ||
+        !["元/吨", "元/kg", "元/千克", "元/件"].includes(material.priceUnit) ||
+        typeof material.density !== "number" || !Number.isFinite(material.density) || material.density <= 0 ||
+        !["g/cm³", "g/cm3"].includes(material.densityUnit ?? "")) {
+        throw new InvalidArgumentError("Material requires a valid purchase price, supported price unit and explicit density in g/cm³");
+      }
+      if (input.stockType !== "CYLINDER" && input.stockType !== "RECTANGULAR_BAR") {
+        throw new InvalidArgumentError("Stock type is invalid");
+      }
+      // One shared parser (domain) validates and computes the blank volume, so
+      // the frozen spec text and the computed rawStockVolume can never diverge.
+      const parsedSpec = typeof input.stockSpec === "string"
+        ? parseStockSpec(input.stockSpec, input.stockType, { requireUnit: true })
+        : null;
+      if (parsedSpec === null) throw new InvalidArgumentError("Stock specification requires explicit positive dimensions and mm, cm or m units");
+      const stockVolume = parsedSpec.volumeM3;
+      if (!Number.isFinite(stockVolume) || stockVolume < geometry.finishedVolumeM3) {
+        throw new InvalidArgumentError("Stock dimensions must define a finite blank at least as large as the finished volume");
+      }
+      // Freeze server-owned geometry and company prices, never the client's copy.
+      input = {
+        ...input,
+        finishedVolume: geometry.finishedVolumeM3,
+        costData,
+        allowances: costData.allowances.find((definition) => definition.stockType === input.stockType)?.allowances ?? [],
+        formulaVersion: "v1",
+        capturedAt: createdAt
+      };
       const result = calculateCostEstimate(input);
+      if (![result.rawStockVolume, result.materialQuantity, result.materialCost,
+        result.perPieceCost, result.totalCost, ...result.fixedCostLines.flatMap((line) => [line.amount, line.subtotal])]
+        .every((value) => Number.isFinite(value) && value >= 0)) {
+        throw new InvalidArgumentError("Cost calculation overflowed or produced an invalid amount");
+      }
 
       // Determine report sequence label (Q01, Q02, ...)
       const existingReports = this.repository.listCostReportsByRevision(drawing.id, revision.id);
-      const nextSeq = existingReports.length + 1;
+      // Deleting an earlier report must not collide with a surviving report.
+      const nextSeq = existingReports.reduce((max, report) => Math.max(max, Number(report.label.slice(1))), 0) + 1;
       const label = costReportLabel(nextSeq);
-      const reportId = `report-${revision.id}-q${nextSeq.toString().padStart(2, "0")}`;
+      const reportId = generateId();
 
       const report: CostEstimateReport = {
         id: reportId,

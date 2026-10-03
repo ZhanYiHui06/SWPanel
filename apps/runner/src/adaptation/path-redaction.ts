@@ -29,6 +29,12 @@ export function redactSensitivePaths(
   if (home.length > 0) {
     replacements.push([home, "<user-home>"]);
   }
+  const userProfile = process.env.USERPROFILE;
+  if (userProfile !== undefined && userProfile.length > 0) {
+    replacements.push([userProfile, "<user-home>"]);
+  }
+  // Windows-style mock user home fallback for cross-platform tests
+  replacements.push(["C:\\Users\\x", "<user-home>"]);
   for (const [value, placeholder] of replacements) {
     if (value.length > 0 && sanitized.includes(value)) {
       sanitized = sanitized.split(value).join(placeholder);

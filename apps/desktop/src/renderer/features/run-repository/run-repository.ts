@@ -196,7 +196,10 @@ export function applyRunEventToDetail(
       if (event.activity !== undefined) run.activity = event.activity;
       break;
     case "ClarificationRequired":
+      // Terminal event: the Run ends here and is never resumed.
+      run.status = "CLARIFICATION_REQUIRED";
       run.clarificationRequestId = event.clarificationRequestId;
+      run.completedAt = event.occurredAt;
       break;
     case "Completed":
       run.status = "COMPLETED";

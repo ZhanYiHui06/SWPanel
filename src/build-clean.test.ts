@@ -83,7 +83,7 @@ describe("build clean vs Electron Forge output", () => {
     ).toBe(false);
   });
 
-  it(
+  it.skipIf(!isWindows)(
     "workspace dist rebuild completes while a packaged app.asar is locked",
     { timeout: 15_000 },
     async () => {

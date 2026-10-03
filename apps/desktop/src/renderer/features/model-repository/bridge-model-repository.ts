@@ -41,7 +41,7 @@ export class BridgeModelRepository implements ModelRepository {
         result: input.result,
         ...(input.comment === undefined ? {} : { comment: input.comment }),
         reviewerId: input.reviewerId,
-        reviewedAt: input.reviewedAt
+        reviewedAt: input.reviewedAt ?? new Date().toISOString()
       })
     );
   }

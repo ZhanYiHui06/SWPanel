@@ -8,9 +8,11 @@ import type { RunListItemView } from "@swpanel/contracts";
 import { useRepository } from "../features/repository-provider.js";
 import { useDrawingRepository } from "../features/bridge-repository/drawing-repository-provider.js";
 import { useRunEventStream, useRunInvalidate, useRunQuery, useRunRepository } from "../features/run-repository/run-repository-provider.js";
-import { useRunIdentity } from "../features/run-repository/run-display.js";
+import { useModelLabel, useRunIdentity } from "../features/run-repository/run-display.js";
 import { LiveCurrentRunCard } from "../features/run-repository/run-current-card.js";
-import { toRunRepositoryError } from "../features/run-repository/run-repository.js";
+import { describeError } from "../features/error-messages.js";
+import { CancelRunDialog } from "../features/runs/CancelRunDialog.js";
+import { runFailureSummary } from "../features/runs/failure-presentation.js";
 import { cancelOutcomeNotice, type CancelNotice } from "../features/runs/cancel-outcome.js";
 import { formatRelativeTime } from "../features/format.js";
 import { revisionLabelOrId } from "../features/ids.js";
@@ -42,11 +44,6 @@ const HISTORY_FILTERS: readonly { value: HistoryFilter; label: string }[] = [
   { value: "FAILED", label: "失败" },
   { value: "CANCELLED", label: "已取消" }
 ];
-
-function modelLabelFromId(modelId: string | null | undefined): string | null {
-  if (modelId === null || modelId === undefined) return null;
-  return modelId.replace(/^model-/, "").toUpperCase();
-}
 
 // ---------------------------------------------------------------------------
 // Product-runtime (bridge / unavailable) implementation
@@ -95,10 +92,11 @@ function QueueRunRow({
 }
 
 /**
- * Lightweight status watcher for QUEUED runs: subscribes the run's event
- * stream purely so status transitions (start / cancel / terminal) invalidate
- * `runs:list` and the queue/current/history views stay truthful even though
- * the run is not the visible current run yet.
+ * Lightweight status watcher for the HEAD of the queue (the only QUEUED run
+ * that can start next, the queue is serial): subscribes the run's event stream
+ * purely so its start invalidates `runs:list` and the queue/current/history
+ * views stay truthful. Deeper queue entries are not subscribed (one SSE
+ * connection per queued Run would exhaust the browser's connection pool).
  */
 function RunStatusWatcher({ runId }: { readonly runId: string }): null {
   useRunEventStream(runId);
@@ -108,14 +106,26 @@ function RunStatusWatcher({ runId }: { readonly runId: string }): null {
 /** The 结果 cell of one history row (failure details come from the run detail). */
 function HistoryResultCell({ run }: { readonly run: RunListItemView }): React.JSX.Element {
   const failureMessage = useRunFailureMessage(run.runId);
+  const modelLabel = useModelLabel(run.status === "COMPLETED" ? run.modelId : null);
+  if (run.status === "FAILED") {
+    return (
+      <span className="col-result-muted">
+        <span>{runFailureSummary(run.failureCode)}</span>
+        {(run.failureCode !== null || failureMessage !== null) && (
+          <div className="text-xs text-muted">
+            技术详情：
+            {run.failureCode !== null && <span className="text-mono">{run.failureCode} </span>}
+            {failureMessage !== null && <span>{failureMessage}</span>}
+          </div>
+        )}
+      </span>
+    );
+  }
   let result = "—";
   if (run.status === "COMPLETED") {
-    const label = modelLabelFromId(run.modelId);
-    result = label !== null ? `生成模型 ${label}` : "已完成（未生成模型）";
+    result = run.modelId === null ? "已完成（未生成模型）" : modelLabel !== null ? `生成模型 ${modelLabel}` : "已生成模型";
   } else if (run.status === "CLARIFICATION_REQUIRED") {
     result = "需要补充信息";
-  } else if (run.status === "FAILED") {
-    result = failureMessage ?? run.failureCode ?? "执行失败";
   } else if (run.status === "CANCELLED") {
     result = "用户主动取消";
   } else if (run.status === "RUNNING") {
@@ -130,6 +140,9 @@ function HistoryResultCell({ run }: { readonly run: RunListItemView }): React.JS
   );
 }
 
+/** History rows rendered at once (each row resolves its identity lazily). */
+const HISTORY_PAGE_SIZE = 20;
+
 /** Product runtime (bridge / unavailable): real async data, never fixtures. */
 function ProductRunsPage({ now }: { readonly now: Date }): React.JSX.Element {
   const runRepository = useRunRepository();
@@ -138,6 +151,8 @@ function ProductRunsPage({ now }: { readonly now: Date }): React.JSX.Element {
   const [filter, setFilter] = useState<HistoryFilter>("ALL");
   const [cancelling, setCancelling] = useState<Readonly<Record<string, boolean>>>({});
   const [notices, setNotices] = useState<readonly CancelNotice[]>([]);
+  const [confirmCancel, setConfirmCancel] = useState<RunListItemView | null>(null);
+  const [visibleHistory, setVisibleHistory] = useState(HISTORY_PAGE_SIZE);
   const nextNoticeId = useRef(1);
 
   const listQuery = useRunQuery("runs:list", () => runRepository.listRuns());
@@ -164,6 +179,7 @@ function ProductRunsPage({ now }: { readonly now: Date }): React.JSX.Element {
   }));
 
   const filteredRows = filter === "ALL" ? historyRows : historyRows.filter((row) => row.status === filter);
+  const shownRows = filteredRows.slice(0, visibleHistory);
 
   const columns: DataTableColumn[] = [
     { key: "run", header: "Run", width: "12%", cellClass: "mono" },
@@ -174,7 +190,7 @@ function ProductRunsPage({ now }: { readonly now: Date }): React.JSX.Element {
     { key: "time", header: "时间", width: "16%", cellClass: "date" }
   ];
 
-  const tableRows = filteredRows.map((row) => ({
+  const tableRows = shownRows.map((row) => ({
     run: row.runLabel,
     drawing: <DrawingNumberCell runId={row.runId} fallback={row.drawingNumber} />,
     version: <RevisionLabelCell runId={row.runId} fallback={row.revisionLabel} />,
@@ -189,22 +205,29 @@ function ProductRunsPage({ now }: { readonly now: Date }): React.JSX.Element {
     void navigate(`/runs/${runId}`);
   }
 
+  /** RUNNING Runs need a second confirmation (cancel deletes generated files). */
+  function requestCancel(run: RunListItemView): void {
+    if (cancelling[run.runId] === true) return;
+    if (run.status === "RUNNING") setConfirmCancel(run);
+    else void handleCancel(run);
+  }
+
   async function handleCancel(run: RunListItemView): Promise<void> {
     if (cancelling[run.runId] === true) return; // duplicate submit guard
+    setConfirmCancel(null);
     setCancelling((current) => ({ ...current, [run.runId]: true }));
     try {
       const outcome = await runRepository.cancelRun({ runId: run.runId, reason: "用户主动取消" });
       setNotices((current) => [...current, cancelOutcomeNotice(outcome, run.runLabel, nextNoticeId.current++)]);
       if (outcome.status === "CANCELLED") invalidateRuns();
     } catch (error) {
-      const structured = toRunRepositoryError(error);
       setNotices((current) => [
         ...current,
         {
           id: nextNoticeId.current++,
           tone: "error",
           title: `Run ${run.runLabel} 取消失败`,
-          text: `${structured.code}: ${structured.message}`
+          text: describeError(error).message
         }
       ]);
     } finally {
@@ -219,11 +242,18 @@ function ProductRunsPage({ now }: { readonly now: Date }): React.JSX.Element {
         <p className="text-muted text-sm">全局建模任务监控</p>
       </div>
       {notices.map((notice) => (
-        <InlineNotice key={notice.id} tone={notice.tone} title={notice.title} className="mb-4">
+        <InlineNotice key={notice.id} tone={notice.tone} title={notice.title} className="mb-4" role={notice.tone === "error" ? "alert" : "status"}>
           {notice.text}
         </InlineNotice>
       ))}
       {children}
+      {confirmCancel !== null && (
+        <CancelRunDialog
+          runLabel={confirmCancel.runLabel}
+          onKeep={() => setConfirmCancel(null)}
+          onConfirm={() => void handleCancel(confirmCancel)}
+        />
+      )}
     </div>
   );
 
@@ -260,7 +290,7 @@ function ProductRunsPage({ now }: { readonly now: Date }): React.JSX.Element {
           <LiveCurrentRunCard
             run={currentRun}
             now={now}
-            onCancel={() => void handleCancel(currentRun)}
+            onCancel={() => requestCancel(currentRun)}
             cancelling={cancelling[currentRun.runId] === true}
           />
         )}
@@ -278,14 +308,14 @@ function ProductRunsPage({ now }: { readonly now: Date }): React.JSX.Element {
             {queuedRuns.length === 0 ? (
               <p className="text-sm text-muted">当前没有等待执行的任务。</p>
             ) : (
-              queuedRuns.map((run) => (
+              queuedRuns.map((run, index) => (
                 <div key={run.runId}>
-                  <RunStatusWatcher runId={run.runId} />
+                  {index === 0 && <RunStatusWatcher runId={run.runId} />}
                   <QueueRunRow
                     run={run}
                     now={now}
                     cancelling={cancelling[run.runId] === true}
-                    onCancel={() => void handleCancel(run)}
+                    onCancel={() => requestCancel(run)}
                   />
                 </div>
               ))
@@ -310,14 +340,29 @@ function ProductRunsPage({ now }: { readonly now: Date }): React.JSX.Element {
               <p className="text-sm text-muted">暂无建模任务记录。</p>
             </CardBody>
           </Card>
+        ) : filteredRows.length === 0 ? (
+          <Card>
+            <CardBody>
+              <p className="text-sm text-muted">没有符合当前筛选条件的任务。</p>
+            </CardBody>
+          </Card>
         ) : (
-          <DataTable
-            label="历史建模任务"
-            columns={columns}
-            rows={tableRows}
-            keyColumn="__runId"
-            rowClick={openRun}
-          />
+          <>
+            <DataTable
+              label="历史建模任务"
+              columns={columns}
+              rows={tableRows}
+              keyColumn="__runId"
+              rowClick={openRun}
+            />
+            {filteredRows.length > shownRows.length && (
+              <div className="mt-4">
+                <Button variant="secondary" size="sm" onClick={() => setVisibleHistory((count) => count + HISTORY_PAGE_SIZE)}>
+                  显示更多（还有 {filteredRows.length - shownRows.length} 条）
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </>
@@ -421,7 +466,7 @@ export function RunsPage({ now = new Date() }: RunsPageProps): React.JSX.Element
       const detail = repository.getRunDetail(run.id);
       let result = "—";
       if (run.status === "COMPLETED") {
-        const label = modelLabelFromId(run.modelId);
+        const label = run.modelId === null || run.modelId === undefined ? null : repository.getModel(run.modelId)?.number ?? null;
         result = label !== null ? `生成模型 ${label}` : "已完成";
       } else if (run.status === "CLARIFICATION_REQUIRED") {
         const clarificationId = run.clarificationRequestId;

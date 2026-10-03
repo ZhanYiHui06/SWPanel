@@ -23,6 +23,8 @@ function isSameLocalDay(a: Date, b: Date): boolean {
  * - same local day  -> `今天 HH:MM`
  * - previous day    -> `昨天 HH:MM`
  * - otherwise       -> `M月D日 HH:MM`
+ * - a different calendar year than `now` additionally shows the year:
+ *                       `YYYY年M月D日 HH:MM`
  */
 export function formatRelativeTime(iso: string, now: Date = new Date()): string {
   const date = new Date(iso);
@@ -30,7 +32,8 @@ export function formatRelativeTime(iso: string, now: Date = new Date()): string 
   if (isSameLocalDay(date, now)) return `今天 ${time}`;
   const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
   if (isSameLocalDay(date, yesterday)) return `昨天 ${time}`;
-  return `${date.getMonth() + 1}月${date.getDate()}日 ${time}`;
+  const year = date.getFullYear() === now.getFullYear() ? "" : `${date.getFullYear()}年`;
+  return `${year}${date.getMonth() + 1}月${date.getDate()}日 ${time}`;
 }
 
 /** Compact machine label, e.g. `08-10 22:31`. */

@@ -3,6 +3,7 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { DEVELOPMENT_ROUTE, PRODUCT_ROUTES } from "./routes.js";
+import { NotFoundPage } from "../routes/NotFoundPage.js";
 import { RoutePlaceholder } from "../routes/RoutePlaceholder.js";
 
 describe("product route registry", () => {
@@ -32,5 +33,15 @@ describe("product route registry", () => {
 
     expect(await screen.findByRole("heading", { name: route.title })).toBeInTheDocument();
     expect(document.querySelector(`[data-route-id="${route.id}"]`)).not.toBeNull();
+  });
+
+  it("renders a 404 page with links back for unknown URLs", async () => {
+    const router = createMemoryRouter([{ path: "*", element: <NotFoundPage /> }], {
+      initialEntries: ["/nope/never"]
+    });
+    render(<RouterProvider router={router} />);
+    expect(await screen.findByRole("heading", { name: "页面不存在" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "返回工作台" })).toHaveAttribute("href", "/");
+    expect(document.querySelector('[data-route-id="not-found"]')).not.toBeNull();
   });
 });

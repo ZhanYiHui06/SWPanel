@@ -19,6 +19,7 @@ export type DrawingBusinessStatus =
   | "pending-review"
   | "approved"
   | "running"
+  | "queued"
   | "clarification"
   | "no-model";
 
@@ -32,20 +33,24 @@ export const DRAWING_STATUS: Readonly<Record<DrawingBusinessStatus, DrawingStatu
   "pending-review": { key: "pending-review", label: "待审核", badge: "pending-review" },
   approved: { key: "approved", label: "正式模型", badge: "approved" },
   running: { key: "running", label: "建模中", badge: "running" },
+  queued: { key: "queued", label: "排队中", badge: "queued" },
   clarification: { key: "clarification", label: "需要补充信息", badge: "clarification" },
   "no-model": { key: "no-model", label: "尚未建模", badge: "no-model" }
 };
 
 /**
- * Status derived only from the bridge list view. In the Phase 2 product runtime
- * no Run/Model data exists yet, so real drawings render as 尚未建模 — which is
- * the truthful state, not a fixture.
+ * Status derived only from the bridge list view. The Runner now reports the
+ * current Revision's latest Run status, open Clarifications, pending-review
+ * Models and the current approved Model, so the library can show the real
+ * state. Priority: clarification > pending-review > running > queued > approved.
  */
 export function drawingStatusFromListItem(item: DrawingListItemView): DrawingStatusPresentation {
   if (item.currentRevisionId === null) return DRAWING_STATUS["no-model"];
   if (item.hasOpenClarification) return DRAWING_STATUS.clarification;
-  if (item.runStatus === "RUNNING") return DRAWING_STATUS.running;
   if (item.runStatus === "CLARIFICATION_REQUIRED") return DRAWING_STATUS.clarification;
+  if (item.hasPendingReview === true) return DRAWING_STATUS["pending-review"];
+  if (item.runStatus === "RUNNING") return DRAWING_STATUS.running;
+  if (item.runStatus === "QUEUED") return DRAWING_STATUS.queued;
   if (item.currentApprovedModelId !== null) return DRAWING_STATUS.approved;
   return DRAWING_STATUS["no-model"];
 }

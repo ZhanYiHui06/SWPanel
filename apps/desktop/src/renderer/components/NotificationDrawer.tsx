@@ -1,5 +1,6 @@
 import { EmptyState } from "@swpanel/ui";
 import type { NotificationItem } from "@swpanel/domain";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useNotifications } from "../features/notifications/notification-context.js";
@@ -22,6 +23,47 @@ export function NotificationDrawer(): React.JSX.Element | null {
   } = useNotifications();
   const navigate = useNavigate();
 
+  const panelRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = panelRef.current;
+    const focusables = (): HTMLElement[] =>
+      panel === null
+        ? []
+        : Array.from(panel.querySelectorAll<HTMLElement>("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])"));
+    (focusables()[0] ?? panel)?.focus();
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDrawer();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusables();
+      if (items.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = items[0] as HTMLElement;
+      const last = items[items.length - 1] as HTMLElement;
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !panel?.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !panel?.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previous?.focus();
+    };
+  }, [drawerOpen, closeDrawer]);
+
   if (!drawerOpen) return null;
 
   function handleActivate(item: NotificationItem): void {
@@ -36,8 +78,11 @@ export function NotificationDrawer(): React.JSX.Element | null {
     <div className="notification-overlay" onClick={closeDrawer}>
       <aside
         className="notification-drawer"
+        ref={panelRef}
         role="dialog"
+        aria-modal="true"
         aria-label="通知中心"
+        tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="notification-drawer-header">
@@ -81,7 +126,7 @@ export function NotificationDrawer(): React.JSX.Element | null {
                         <span className="notification-item-message">{item.message}</span>
                       )}
                     </span>
-                    {!item.read && <span className="notification-item-unread-badge" aria-label="未读" />}
+                    {!item.read && <span className="notification-item-unread-badge" role="img" aria-label="未读" />}
                   </button>
                 </li>
               ))}

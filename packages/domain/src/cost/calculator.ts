@@ -86,41 +86,86 @@ export const DEFAULT_STOCK_VOLUME_FACTOR = 2;
 const MILLIMETER_PER_METER = 1000;
 const CUBIC_MILLIMETER_PER_CUBIC_METER = 1e9;
 
-/** Rounds a CNY value to 2 decimal places, half up. */
+/** Largest order quantity accepted by the calculator and the cost workflow. */
+export const MAX_COST_QUANTITY = 1_000_000;
+
+/**
+ * Rounds a CNY value to 2 decimal places, half up, on the DECIMAL
+ * representation of the number (so 2.135 -> 2.14, 4.015 -> 4.02, which the
+ * binary `(v + EPSILON) * 100` trick gets wrong). Values whose string form
+ * uses exponent notation (tiny or astronomically large) fall back to the
+ * scaled-float rounding.
+ */
 export function roundCny(val: number): number {
-  return Math.round((val + Number.EPSILON) * 100) / 100;
+  if (!Number.isFinite(val)) return val;
+  const text = String(val);
+  if (text.includes("e")) return Math.round((val + Number.EPSILON) * 100) / 100;
+  const scaled = Math.round(Number(`${text}e2`));
+  return Number(`${scaled}e-2`);
 }
 
-/** Parses a human stock spec into an m³ volume, or null when not parseable. */
-function parseStockSpec(stockSpec: string, stockType: StockType): number | null {
-  const spec = stockSpec.trim();
+/** Supported linear units of a stock specification. */
+export type StockSpecUnit = "mm" | "cm" | "m";
+
+export interface ParsedStockSpec {
+  /** Dimensions in millimetres: [diameter, length] or [length, width, height]. */
+  dimensionsMm: number[];
+  /** Explicit unit written in the spec, or null when it was omitted. */
+  unit: StockSpecUnit | null;
+  /** Blank volume in m³. */
+  volumeM3: number;
+}
+
+const SPEC_NUMBER = "(\\d+(?:\\.\\d+)?)";
+const SPEC_SEPARATOR = "\\s*[×xX*]\\s*";
+const SPEC_UNIT = "(?:\\s*(mm|cm|m))?";
+const CYLINDER_SPEC = new RegExp(
+  `^[ØøΦφ⌀]?\\s*${SPEC_NUMBER}${SPEC_SEPARATOR}${SPEC_NUMBER}${SPEC_UNIT}$`,
+  "i"
+);
+const BAR_SPEC = new RegExp(
+  `^${SPEC_NUMBER}${SPEC_SEPARATOR}${SPEC_NUMBER}${SPEC_SEPARATOR}${SPEC_NUMBER}${SPEC_UNIT}$`,
+  "i"
+);
+
+/**
+ * THE single stock-specification parser (server validation and the calculator
+ * share it). Accepts "Ø320 × 820 mm" (cylinder) and "200 × 100 × 400 mm" (bar)
+ * with the unit optionally separated by spaces ("820mm", "0.82 m"), any case
+ * ("MM") and full-width characters (NFKC-normalised: "Ｘ", "．", "ｍｍ").
+ * Returns null when the text is not a well-formed spec for `stockType` or any
+ * dimension is not a positive finite number. A missing unit is only accepted
+ * when `requireUnit` is false (then millimetres are assumed).
+ */
+export function parseStockSpec(
+  stockSpec: string,
+  stockType: StockType,
+  options: { requireUnit?: boolean } = {}
+): ParsedStockSpec | null {
+  if (typeof stockSpec !== "string") return null;
+  const spec = stockSpec.normalize("NFKC").trim();
   if (spec.length === 0) return null;
-
-  // Linear unit defaults to mm when absent ("Ø320 × 820 mm" vs "Ø0.32 × 0.82 m").
-  const unitMatch = spec.match(/\b(?:mm|cm|m)\b/i);
-  const unit = unitMatch === null || unitMatch[0] === undefined ? null : unitMatch[0].toLowerCase();
-  const mmFactor =
-    unit === "m" ? MILLIMETER_PER_METER : unit === "cm" ? 10 : 1;
-
-  const numbers = [...spec.matchAll(/\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
-  if (numbers.length === 0) return null;
-  const dims = numbers.map((value) => value * mmFactor);
-  if (dims.some((dimension) => !Number.isFinite(dimension) || dimension <= 0)) {
-    return null;
-  }
-
+  const match = (stockType === "CYLINDER" ? CYLINDER_SPEC : stockType === "RECTANGULAR_BAR" ? BAR_SPEC : null)?.exec(
+    spec
+  );
+  if (match === null || match === undefined) return null;
+  const count = stockType === "CYLINDER" ? 2 : 3;
+  const unitText = match[count + 1]?.toLowerCase();
+  const unit: StockSpecUnit | null = unitText === "mm" || unitText === "cm" || unitText === "m" ? unitText : null;
+  if (unit === null && options.requireUnit === true) return null;
+  const mmFactor = unit === "m" ? MILLIMETER_PER_METER : unit === "cm" ? 10 : 1;
+  const dimensionsMm = match.slice(1, count + 1).map((value) => Number(value) * mmFactor);
+  if (dimensionsMm.some((dimension) => !Number.isFinite(dimension) || dimension <= 0)) return null;
+  let volumeM3: number;
   if (stockType === "CYLINDER") {
-    const [diameter, length] = dims;
-    if (diameter === undefined || length === undefined) return null;
-    const radius = diameter / 2;
-    return (Math.PI * radius * radius * length) / CUBIC_MILLIMETER_PER_CUBIC_METER;
+    const [diameter, length] = dimensionsMm as [number, number];
+    volumeM3 = (Math.PI * (diameter / 2) * (diameter / 2) * length) / CUBIC_MILLIMETER_PER_CUBIC_METER;
+  } else {
+    const [length, width, height] = dimensionsMm as [number, number, number];
+    volumeM3 = (length * width * height) / CUBIC_MILLIMETER_PER_CUBIC_METER;
   }
-  if (stockType === "RECTANGULAR_BAR") {
-    const [length, width, height] = dims;
-    if (length === undefined || width === undefined || height === undefined) return null;
-    return (length * width * height) / CUBIC_MILLIMETER_PER_CUBIC_METER;
-  }
-  return null;
+  if (!Number.isFinite(volumeM3) || volumeM3 <= 0) return null;
+  return { dimensionsMm, unit, volumeM3 };
 }
 
 const DIAMETER_MARKERS = ["直径"];
@@ -177,7 +222,7 @@ function stockVolumeFromFinishedAndAllowances(
 /** Resolves the raw stock volume with the documented 3-stage precedence. */
 function resolveRawStockVolume(input: CostEstimateInputSnapshot): number {
   const parsed = parseStockSpec(input.stockSpec, input.stockType);
-  if (parsed !== null) return parsed;
+  if (parsed !== null) return parsed.volumeM3;
 
   const fromFinishedAndAllowances = stockVolumeFromFinishedAndAllowances(input);
   if (fromFinishedAndAllowances !== null) return fromFinishedAndAllowances;
@@ -242,8 +287,10 @@ function computeFixedCosts(fixedCosts: readonly FixedCostValue[]): ComputedFixed
 export function calculateCostEstimate(
   input: CostEstimateInputSnapshot
 ): CostEstimateResult {
-  if (!Number.isInteger(input.quantity) || input.quantity < 1) {
-    throw new DomainInvariantError(`quantity must be a positive integer, got ${input.quantity}`);
+  if (!Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > MAX_COST_QUANTITY) {
+    throw new DomainInvariantError(
+      `quantity must be an integer between 1 and ${MAX_COST_QUANTITY}, got ${input.quantity}`
+    );
   }
   const material = input.costData.materials.find(
     (candidate) => candidate.id === input.materialId
@@ -268,6 +315,10 @@ export function calculateCostEstimate(
   );
   const totalCost = roundCny(perPieceCost * input.quantity);
   const materialCost = roundCny(materialCostPerPiece * input.quantity);
+
+  if (![materialCostPerPiece, perPieceCost, totalCost, materialCost].every(Number.isFinite)) {
+    throw new DomainInvariantError("cost calculation overflowed (non-finite amount)");
+  }
 
   return {
     rawStockVolume,

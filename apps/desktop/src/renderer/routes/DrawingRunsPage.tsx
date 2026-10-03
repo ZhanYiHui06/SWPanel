@@ -62,6 +62,7 @@ function ProductDrawingRunsPage({ now }: { readonly now: Date }): React.JSX.Elem
           modelId: run.modelId,
           clarificationRequestId: run.clarificationRequestId,
           failureMessage: detail.run.failureMessage ?? null,
+          failureCode: run.failureCode,
           now
         }),
         detailHref: `/runs/${run.runId}`
@@ -206,6 +207,8 @@ export function DrawingRunsPage({ now = new Date() }: DrawingRunsPageProps): Rea
       modelId: run.modelId,
       clarificationRequestId: run.clarificationRequestId,
       failureMessage: rawRun?.failureMessage ?? null,
+      failureCode: rawRun?.failureCode ?? null,
+      modelLabel: run.modelId === null ? null : repository.getModel(run.modelId)?.number ?? null,
       now
     });
     return { ...item, detailHref: `/runs/${run.runId}` };

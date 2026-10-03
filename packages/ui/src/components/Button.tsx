@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
  * Mirrors `.btn` + variant/size classes from the prototype.
  */
 export interface ButtonProps {
-  variant?: "primary" | "secondary" | "ghost" | "ghost-muted";
+  variant?: "primary" | "secondary" | "ghost" | "ghost-muted" | "danger";
   size?: "sm" | "md" | "lg";
   /** When set, the button renders as an anchor styled identically. */
   href?: string;
@@ -26,7 +26,8 @@ const variantClass: Record<NonNullable<ButtonProps["variant"]>, string> = {
   primary: "btn-primary",
   secondary: "btn-secondary",
   ghost: "btn-ghost",
-  "ghost-muted": "btn-ghost-muted"
+  "ghost-muted": "btn-ghost-muted",
+  danger: "btn-danger"
 };
 
 const sizeClass: Record<NonNullable<ButtonProps["size"]>, string | null> = {

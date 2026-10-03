@@ -87,6 +87,10 @@ export class RunnerRequestHandler implements IpcRequestHandler {
     const operation = request.operation as QueryName;
     const payload = request.payload as Record<string, unknown>;
     switch (operation) {
+      case "drawing.getDeletionImpact":
+        return this.runner.getDeletionImpact("drawing", payload.drawingId as string);
+      case "model.getDeletionImpact":
+        return this.runner.getDeletionImpact("model", payload.modelId as string);
       case "drawing.getDetail":
         return this.runner.getDrawingDetail(payload.drawingId as string);
       case "drawing.getHistory":
@@ -143,6 +147,10 @@ export class RunnerRequestHandler implements IpcRequestHandler {
     const operation = request.operation;
     const payload = request.payload as CommandPayload;
     switch (operation) {
+      case "drawing.delete":
+        return this.runner.deleteBusinessObject("drawing", payload.drawingId as string, payload.confirmationToken as string);
+      case "model.delete":
+        return this.runner.deleteBusinessObject("model", payload.modelId as string, payload.confirmationToken as string);
       case "drawing.create": {
         const source = payload.sourceFile as {
           fileName: string;

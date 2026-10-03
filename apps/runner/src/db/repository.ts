@@ -155,6 +155,8 @@ interface CostReportRow {
   updated_at: string;
 }
 
+const CLEANUP_QUEUE_KEY = "business_deletion_cleanup";
+
 /**
  * SQLite-backed implementation of the `RepositoryReader` / `RepositoryWriter`
  * ports plus the low-level persistence primitives the Drawing workflow service
@@ -690,6 +692,41 @@ export class SqliteRepository implements RepositoryReader, RepositoryWriter {
   }
 
   /**
+   * Durable file-cleanup queue shared with `BusinessDeletionService` (same
+   * `settings` key and JSON shape). A source-file cleanup intent is recorded
+   * inside the deleting transaction so a committed deletion never leaves an
+   * untracked orphan file behind.
+   */
+  enqueueSourceCleanup(relativePath: string, now: string): void {
+    const jobs = this.readCleanupQueue();
+    if (jobs.some((job) => job.kind === "source" && job.relativePath === relativePath)) return;
+    jobs.push({ kind: "source", relativePath });
+    this.db
+      .prepare(
+        "INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) " +
+          "ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at"
+      )
+      .run(CLEANUP_QUEUE_KEY, JSON.stringify(jobs), now);
+  }
+
+  /** Removes a satisfied source-file cleanup intent (no-op when absent). */
+  dequeueSourceCleanup(relativePath: string, now: string): void {
+    const jobs = this.readCleanupQueue();
+    const remaining = jobs.filter((job) => !(job.kind === "source" && job.relativePath === relativePath));
+    if (remaining.length === jobs.length) return;
+    this.db
+      .prepare("UPDATE settings SET value = ?, updated_at = ? WHERE key = ?")
+      .run(JSON.stringify(remaining), now, CLEANUP_QUEUE_KEY);
+  }
+
+  private readCleanupQueue(): Array<{ kind: string; relativePath?: string }> {
+    const row = this.db.prepare("SELECT value FROM settings WHERE key = ?").get(CLEANUP_QUEUE_KEY) as
+      | { value: string }
+      | undefined;
+    return row === undefined ? [] : (JSON.parse(row.value) as Array<{ kind: string; relativePath?: string }>);
+  }
+
+  /**
    * Deletes the ONE Cost Estimate Report row that matches both the report id
    * and its owning Revision. Returns `true` when a row was deleted, `false`
    * when no row matched (unknown report, or the pair mismatched). Callers
@@ -844,29 +881,59 @@ export class SqliteRepository implements RepositoryReader, RepositoryWriter {
   // Mapping helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Library list read model. Status fields are derived in ONE aggregate
+   * query (no per-drawing round trips): the current Revision's current
+   * approved Model, the newest Run status of the current Revision, whether the
+   * current Revision has a PENDING_REVIEW Model and whether it has an OPEN
+   * Clarification Request. Drawing files are never touched here.
+   */
   private listDrawingListItems(): DrawingListItemView[] {
-    const drawings = this.db
-      .prepare("SELECT * FROM drawings ORDER BY updated_at DESC, id ASC")
-      .all() as unknown as DrawingRow[];
-    return drawings.map((row) => {
-      const drawing = this.mapDrawing(row);
-      const revisions = this.listRevisions(drawing.id);
-      const current = revisions.find((revision) => revision.id === drawing.currentRevisionId);
-      const latest = revisions.at(-1);
-      return {
-        drawingId: drawing.id,
-        drawingNumber: drawing.drawingNumber,
-        name: drawing.name,
-        currentRevisionId: drawing.currentRevisionId,
-        currentRevisionLabel: current === undefined ? null : revisionLabel(current.sequence),
-        currentApprovedModelId: null,
-        runStatus: null,
-        updatedAt: drawing.updatedAt,
-        totalRevisionCount: revisions.length,
-        latestRevisionLabel: latest === undefined ? null : revisionLabel(latest.sequence),
-        hasOpenClarification: false
-      };
-    });
+    const rows = this.db
+      .prepare(
+        "SELECT d.id AS id, d.drawing_number AS drawing_number, d.name AS name, " +
+          "d.current_revision_id AS current_revision_id, d.updated_at AS updated_at, " +
+          "cur.sequence AS current_sequence, " +
+          "cur.current_approved_model_id AS approved_model_id, " +
+          "(SELECT COUNT(*) FROM drawing_revisions x WHERE x.drawing_id = d.id) AS revision_count, " +
+          "(SELECT MAX(x.sequence) FROM drawing_revisions x WHERE x.drawing_id = d.id) AS latest_sequence, " +
+          "(SELECT r.status FROM runs r WHERE r.revision_id = d.current_revision_id " +
+          "ORDER BY r.created_at DESC, r.id ASC LIMIT 1) AS run_status, " +
+          "EXISTS (SELECT 1 FROM models m WHERE m.revision_id = d.current_revision_id " +
+          "AND m.review_status = 'PENDING_REVIEW') AS has_pending_review, " +
+          "EXISTS (SELECT 1 FROM clarification_requests c WHERE c.revision_id = d.current_revision_id " +
+          "AND c.status = 'OPEN') AS has_open_clarification " +
+          "FROM drawings d LEFT JOIN drawing_revisions cur ON cur.id = d.current_revision_id " +
+          "ORDER BY d.updated_at DESC, d.id ASC"
+      )
+      .all() as unknown as Array<{
+      id: string;
+      drawing_number: string;
+      name: string;
+      current_revision_id: string | null;
+      updated_at: string;
+      current_sequence: number | null;
+      approved_model_id: string | null;
+      revision_count: number;
+      latest_sequence: number | null;
+      run_status: string | null;
+      has_pending_review: number;
+      has_open_clarification: number;
+    }>;
+    return rows.map((row) => ({
+      drawingId: row.id,
+      drawingNumber: row.drawing_number,
+      name: row.name,
+      currentRevisionId: row.current_revision_id,
+      currentRevisionLabel: row.current_sequence === null ? null : revisionLabel(row.current_sequence),
+      currentApprovedModelId: row.approved_model_id,
+      runStatus: row.run_status,
+      updatedAt: row.updated_at,
+      totalRevisionCount: row.revision_count,
+      latestRevisionLabel: row.latest_sequence === null ? null : revisionLabel(row.latest_sequence),
+      hasOpenClarification: row.has_open_clarification === 1,
+      hasPendingReview: row.has_pending_review === 1
+    }));
   }
 
   private toRevisionListItem(drawing: Drawing, revision: DrawingRevision): RevisionListItemView {

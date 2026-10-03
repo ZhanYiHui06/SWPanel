@@ -46,7 +46,11 @@
  * `workspace-write` sandbox and the attempt-root `writableRoots`.
  */
 import { CODEX_AGENT_TURN_OUTPUT_WIRE_SCHEMA } from "./codex-agent-turn-output.js";
-import { isAbsolute } from "node:path";
+import { isAbsolute, posix, win32 } from "node:path";
+
+function isPlatformOrCrossAbsolute(value: string): boolean {
+  return isAbsolute(value) || win32.isAbsolute(value) || posix.isAbsolute(value);
+}
 
 import { InvalidArgumentError } from "../../errors.js";
 
@@ -114,7 +118,7 @@ function assertAbsolutePath(value: string, field: string): void {
   if (value.length === 0) {
     throw new InvalidArgumentError(`${field} must be a non-empty string`);
   }
-  if (!isAbsolute(value)) {
+  if (!isPlatformOrCrossAbsolute(value)) {
     throw new InvalidArgumentError(`${field} must be an absolute path`);
   }
 }

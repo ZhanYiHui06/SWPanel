@@ -41,7 +41,7 @@ describe("repo .gitignore root out-invalid-* quarantine rule", () => {
     // The quarantine directory itself (and hence everything under it) is
     // ignored, matching the audit/forge "out-invalid-" root prefix semantics.
     expect(
-      gitCheckIgnore("out-invalid-2026-08-11T10-01-59-246Z")
+      gitCheckIgnore("out-invalid-2026-08-11T10-01-59-246Z/")
     ).toContain("/out-invalid-*/");
     expect(gitCheckIgnore("out-invalid-/x")).toContain("/out-invalid-*/");
   });

@@ -1,0 +1,40 @@
+import { HttpTransport } from "../http-transport.js";
+export interface RuntimeSettings {
+  platform: string;
+  modelingConfigured: boolean;
+  solidWorksVersion: string | null;
+  skillName: string | null;
+  baseUrl: string;
+  model: string | null;
+  reason: string;
+}
+export interface ApiKeyStatus { hasApiKey: boolean; maskedApiKey: string | null }
+export class SettingsError extends Error {
+  constructor(readonly code: string, message: string) { super(message); }
+}
+async function get<T>(path: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(path, { cache: "no-store" });
+  } catch {
+    throw new SettingsError("NETWORK_ERROR", "无法连接 SWPanel 服务，请确认后端服务已启动");
+  }
+  let result: { ok: boolean; data: T; error?: { code?: string; message?: string } };
+  try {
+    result = await response.json() as typeof result;
+  } catch {
+    throw new SettingsError(response.ok ? "INVALID_RESPONSE" : "NETWORK_ERROR", "服务响应无效，无法读取运行设置");
+  }
+  if (!response.ok || !result.ok) {
+    throw new SettingsError(typeof result.error?.code === "string" ? result.error.code : "UNKNOWN", result.error?.message ?? "无法读取运行设置");
+  }
+  return result.data;
+}
+const transport = () => new HttpTransport({}, SettingsError);
+export const httpSettings = {
+  getRuntime: () => get<RuntimeSettings>("/api/settings/runtime"),
+  getStatus: async () => ({ ok: true as const, data: await get<ApiKeyStatus>("/api/settings/api-key") }),
+  setApiKey: async (apiKey: string) => ({ ok: true as const, data: await transport().post<ApiKeyStatus>("/api/settings/api-key", { apiKey }) }),
+  clearApiKey: async () => ({ ok: true as const, data: await transport().post<ApiKeyStatus>("/api/settings/api-key", { apiKey: null }) }),
+  testConnection: () => transport().post<{ connected: true }>("/api/settings/test-connection", {})
+};

@@ -6,6 +6,7 @@ import { makeTempDir, removeTempDir } from "../test-utils.js";
 import { SqliteDatabase } from "./database.js";
 import { SqliteRepository } from "./repository.js";
 import { RunRepository } from "./run-repository.js";
+import { ModelWorkflowService } from "../service/model-workflow-service.js";
 
 const T0 = "2026-08-13T09:00:00.000Z";
 const T1 = "2026-08-13T09:01:00.000Z";
@@ -288,5 +289,26 @@ describe("RunRepository.reviewModel", () => {
     });
     expect(detail.reviews[0]?.createdAt).toBe("2026-08-13T09:01:00.000Z");
     expect(revisionPointer(fixture, "revision-a1").updated_at).toBe("2026-08-13T09:01:00.000Z");
+  });
+});
+describe("ModelWorkflowService server clock (FE-05)", () => {
+  let fixture: Fixture;
+  beforeEach(() => {
+    fixture = openFixture("model-review-clock");
+  });
+  afterEach(() => closeFixture(fixture));
+
+  it("stamps the review with the server clock and ignores the browser reviewedAt", () => {
+    seedRevision(fixture, "revision-a1");
+    seedModel(fixture, "model-1", "revision-a1", "PENDING_REVIEW");
+    const service = new ModelWorkflowService(fixture.store, fixture.runs, () => new Date(T2));
+    const detail = service.reviewModel({
+      modelId: "model-1",
+      result: "APPROVED",
+      reviewerId: "alice",
+      reviewedAt: "1999-01-01T00:00:00.000Z"
+    });
+    expect(detail.reviews[0]?.createdAt).toBe(T2);
+    expect(revisionPointer(fixture, "revision-a1").updated_at).toBe(T2);
   });
 });

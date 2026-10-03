@@ -17,7 +17,9 @@ describe("process identity provider", () => {
     expect(await queryProcessIdentity(Number.NaN)).toBeNull();
   });
 
-  it(
+  // The provider only supports Windows and Linux; macOS intentionally returns
+  // null ("cannot verify"), so this positive case cannot hold there.
+  it.skipIf(!["win32", "linux", "android"].includes(process.platform))(
     "queries the current process start time and it matches the recorded one",
     async () => {
       const identity = await queryProcessIdentity(process.pid);

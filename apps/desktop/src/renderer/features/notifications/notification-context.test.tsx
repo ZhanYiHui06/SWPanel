@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createFakeBridge } from "../../test/fake-bridge.js";
 import {
@@ -111,6 +111,19 @@ describe("NotificationProvider", () => {
     } finally {
       Reflect.deleteProperty(window, "swpanel");
     }
+  });
+
+  it("reads startup recovery through HTTP when no desktop bridge exists", async () => {
+    Reflect.deleteProperty(window, "swpanel");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ ok: true, data: { scanTime: "2026-10-01T00:00:00Z", totalActiveChecked: 1, resumedCount: 0, failedCount: 1, unsupportedCount: 1, skippedCount: 0 } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetcher);
+    window.history.pushState({}, "", "/?mode=http");
+    try {
+      render(<NotificationProvider><Harness /></NotificationProvider>);
+      expect(await screen.findByText("系统恢复扫描完成")).toBeInTheDocument();
+      expect(screen.getByTestId("feed")).toHaveTextContent("1");
+      expect(JSON.parse(fetcher.mock.calls[0]?.[1]?.body as string)).toEqual({ operation: "system.getRecoveryStatus", payload: { command: "system.getRecoveryStatus" } });
+    } finally { vi.unstubAllGlobals(); window.history.pushState({}, "", "/"); }
   });
 
   it("does not emit a recovery item when the scan is clean", async () => {

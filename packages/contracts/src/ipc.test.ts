@@ -16,11 +16,13 @@ describe("ipc contract", () => {
     expect(QUERY_NAMES).toEqual([
       "drawing.getDetail",
       "drawing.getHistory",
+      "drawing.getDeletionImpact",
       "revision.getDetail",
       "revision.getHistory",
       "run.getDetail",
       "run.list",
       "model.getDetail",
+      "model.getDeletionImpact",
       "clarification.get",
       "costReport.getDetail",
       "costReport.listByRevision",

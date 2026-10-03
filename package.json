@@ -15,10 +15,16 @@
     "npm": ">=11.0.0"
   },
   "scripts": {
-    "dev": "node scripts/dev.mjs",
+    "dev": "npm run dev:renderer --workspace @swpanel/desktop",
+    "dev:server": "npm run start --workspace @swpanel/runner",
+    "dev:electron": "node scripts/dev.mjs",
+    "dev:renderer": "npm run dev:renderer --workspace @swpanel/desktop",
+    "build:web": "npm run build:packages && npm run build:renderer --workspace @swpanel/desktop -- --mode web",
     "typecheck:root": "tsc -p tsconfig.json",
     "typecheck": "npm run typecheck:root && npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
+    "test:web": "vitest run --project=packages --project=renderer",
+    "test:renderer": "npm run test:renderer --workspace @swpanel/desktop",
     "test:root": "vitest run --config vitest.config.js",
     "test": "npm run test:root && npm run test --workspaces --if-present",
     "test:e2e": "npm run build && playwright test --config=playwright.electron.production.config.ts && playwright test",

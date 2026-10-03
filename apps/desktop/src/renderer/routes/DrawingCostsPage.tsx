@@ -16,7 +16,8 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { DrawingWorkspace } from "../features/drawing/DrawingWorkspace.js";
 import { DeleteCostReportDialog } from "../features/drawing/DrawingDialogs.js";
 import { resolveDrawingId, resolveRevisionId, revisionLabelOrId } from "../features/ids.js";
-import { formatCny, formatSmartDate } from "../features/presentation.js";
+import { formatCny } from "../features/cost-format.js";
+import { formatSmartDate } from "../features/presentation.js";
 import { useRepository } from "../features/repository-provider.js";
 import {
   useDrawingRepository,
@@ -29,6 +30,39 @@ import { QueryErrorState, QueryLoadingState } from "../features/drawing/DrawingQ
 
 export interface DrawingCostsPageProps {
   readonly now?: Date;
+}
+
+/**
+ * Empty state for "no report can be generated here". Two different causes need
+ * two different next steps: a non-current Revision must first be made current,
+ * while the current Revision still needs an approved model.
+ */
+function NoEligibleModelState({
+  isCurrentRevision,
+  overviewPath
+}: {
+  readonly isCurrentRevision: boolean;
+  readonly overviewPath: string;
+}): React.JSX.Element {
+  if (!isCurrentRevision) {
+    return (
+      <EmptyState
+        title="该版本不是当前版本"
+        description="只有当前版本的正式模型可以测算成本。请先在概览页将该版本设为当前版本。"
+        action={
+          <Link to={overviewPath} className="btn btn-secondary btn-sm">
+            前往概览
+          </Link>
+        }
+      />
+    );
+  }
+  return (
+    <EmptyState
+      title="当前版本暂无正式模型"
+      description="完成自动建模并通过人工审核后，可生成内部成本测算报告。"
+    />
+  );
 }
 
 export function DrawingCostsPage({ now = new Date() }: DrawingCostsPageProps): React.JSX.Element {
@@ -62,7 +96,7 @@ function ProductDrawingCostsPage({ now }: { readonly now: Date }): React.JSX.Ele
   const shell = (children: React.ReactNode): React.JSX.Element => (
     <div className="page-content wide" data-route-id="drawing-costs">
       <div className="section section-tight">
-        <h1 className="page-header-title">Drawing Workspace · 成本测算</h1>
+        <h1 className="page-header-title">图纸 · 成本测算</h1>
       </div>
       {children}
     </div>
@@ -117,9 +151,8 @@ function ProductDrawingCostsPage({ now }: { readonly now: Date }): React.JSX.Ele
 
   // Same invariant as `canCreateCostEstimateReport`: only the current
   // Revision's current Approved Model may generate a new cost report.
-  const eligible =
-    drawingDetail.drawing.currentRevisionId === revisionDetail.revision.revisionId &&
-    revisionDetail.revision.currentApprovedModelId !== null;
+  const isCurrentRevision = drawingDetail.drawing.currentRevisionId === revisionDetail.revision.revisionId;
+  const eligible = isCurrentRevision && revisionDetail.revision.currentApprovedModelId !== null;
   const approvedModelId = revisionDetail.revision.currentApprovedModelId;
   const approvedModel = approvedModelId ? revisionDetail.models.find((m) => m.modelId === approvedModelId) : undefined;
   const reports = revisionDetail.costReports ?? [];
@@ -172,9 +205,9 @@ function ProductDrawingCostsPage({ now }: { readonly now: Date }): React.JSX.Ele
           ) : (
             <Card>
               <CardBody>
-                <EmptyState
-                  title="当前版本暂无正式模型"
-                  description="完成自动建模并通过人工审核后，可生成内部成本测算报告。"
+                <NoEligibleModelState
+                  isCurrentRevision={isCurrentRevision}
+                  overviewPath={`/drawings/${drawingId}/revisions/${revisionId}/overview`}
                 />
               </CardBody>
             </Card>
@@ -201,10 +234,10 @@ function ProductDrawingCostsPage({ now }: { readonly now: Date }): React.JSX.Ele
               columns={[
                 { header: "报告", key: "label", cellClass: "mono", width: "12%" },
                 { header: "生成时间", key: "createdAt", cellClass: "date", width: "22%" },
-                { header: "数量", key: "quantity", width: "12%" },
-                { header: "单件估算成本", key: "perPieceCost", cellClass: "mono", width: "18%" },
-                { header: "总估算成本", key: "totalCost", cellClass: "mono", width: "18%" },
-                { header: "", key: "actions" }
+                { header: "数量", key: "quantity", cellClass: "numeric", width: "12%" },
+                { header: "单件估算成本", key: "perPieceCost", cellClass: "mono", align: "right", width: "18%" },
+                { header: "总估算成本", key: "totalCost", cellClass: "mono", align: "right", width: "18%" },
+                { header: "", key: "actions", cellClass: "actions" }
               ]}
               rows={reports.map((report) => ({
                 costReportId: report.costReportId,
@@ -284,6 +317,7 @@ function MockDrawingCostsPage({ now }: { readonly now: Date }): React.JSX.Elemen
 
   const eligible =
     drawing !== undefined && revision !== undefined && canCreateCostEstimateReport(drawing, revision);
+  const isCurrentRevision = drawing !== undefined && drawing.currentRevisionId === revisionId;
   const approvedModelId = revision?.currentApprovedModelId ?? null;
   const approvedModel = approvedModelId !== null ? repository.getModel(approvedModelId) : undefined;
   const approvedRun = approvedModel !== undefined ? repository.getRun(approvedModel.runId) : undefined;
@@ -334,9 +368,9 @@ function MockDrawingCostsPage({ now }: { readonly now: Date }): React.JSX.Elemen
           ) : (
             <Card>
               <CardBody>
-                <EmptyState
-                  title="当前版本暂无正式模型"
-                  description="完成自动建模并通过人工审核后，可生成内部成本测算报告。"
+                <NoEligibleModelState
+                  isCurrentRevision={isCurrentRevision}
+                  overviewPath={`/drawings/${drawingId}/revisions/${revisionId}/overview`}
                 />
               </CardBody>
             </Card>
@@ -363,10 +397,10 @@ function MockDrawingCostsPage({ now }: { readonly now: Date }): React.JSX.Elemen
               columns={[
                 { header: "报告", key: "label", cellClass: "mono", width: "12%" },
                 { header: "生成时间", key: "createdAt", cellClass: "date", width: "22%" },
-                { header: "数量", key: "quantity", width: "12%" },
-                { header: "单件估算成本", key: "perPieceCost", cellClass: "mono", width: "18%" },
-                { header: "总估算成本", key: "totalCost", cellClass: "mono", width: "18%" },
-                { header: "", key: "actions" }
+                { header: "数量", key: "quantity", cellClass: "numeric", width: "12%" },
+                { header: "单件估算成本", key: "perPieceCost", cellClass: "mono", align: "right", width: "18%" },
+                { header: "总估算成本", key: "totalCost", cellClass: "mono", align: "right", width: "18%" },
+                { header: "", key: "actions", cellClass: "actions" }
               ]}
               rows={reports.map((report) => ({
                 costReportId: report.costReportId,

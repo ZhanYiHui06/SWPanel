@@ -1,10 +1,13 @@
+import { useState } from "react";
+
 /**
- * ModelPreview — the isometric cylinder glyph used by Model cards and the Model
- * Detail preview. Faithful to the inline SVG in `.design/pages/model-detail.html`
- * (roll shape: top ellipse, side walls, base ellipse, inner bore).
+ * Displays a published preview image, with a truthful unavailable state on error.
+ * The explicit placeholder option preserves the canonical fixture glyph.
  */
 
 export interface ModelPreviewProps {
+  readonly imageUrl?: string;
+  readonly placeholder?: boolean;
   readonly modelLabel: string;
   readonly size?: number;
   readonly showLabel?: boolean;
@@ -13,10 +16,21 @@ export interface ModelPreviewProps {
 
 export function ModelPreview({
   modelLabel,
+  imageUrl,
+  placeholder = true,
   size = 100,
   showLabel = false,
   className
 }: ModelPreviewProps): React.JSX.Element {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  if (imageUrl !== undefined && imageUrl !== failedUrl) {
+    return <img src={imageUrl} alt={`${modelLabel} 模型预览`} className={className}
+      style={{ maxWidth: "100%", maxHeight: 360, objectFit: "contain" }}
+      onError={() => setFailedUrl(imageUrl)} />;
+  }
+  if (!placeholder) {
+    return <p className="text-sm text-muted" role="status">{imageUrl ? "模型预览图无法加载，请下载模型检查。" : "暂无模型预览图，请下载模型检查。"}</p>;
+  }
   return (
     <svg
       width={size}

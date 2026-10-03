@@ -39,6 +39,7 @@ export {
   type SelectProps,
   type SelectOption
 } from "./components/forms.js";
+export { Dialog, type DialogProps } from "./components/Dialog.js";
 export { EmptyState, type EmptyStateProps } from "./components/EmptyState.js";
 export { InlineNotice, type InlineNoticeProps } from "./components/InlineNotice.js";
 export {

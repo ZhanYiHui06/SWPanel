@@ -30,7 +30,10 @@ describe("CostWorkflowService", () => {
     ledger = new DrawingFileLedger({ dataRoot: dir });
     ledger.open();
     drawingService = new DrawingWorkflowService(repo, ledger, runs);
-    costService = new CostWorkflowService(repo, runs);
+    // Explicit test-only geometry seam; synthetic DB fixtures contain no CAD bytes.
+    costService = new CostWorkflowService(repo, runs, () => ({
+      finishedVolumeM3: 0.031, boundingBoxMm: null, sourceArtifactId: "test-geometry"
+    }));
   });
 
   afterAll(() => {
@@ -147,11 +150,24 @@ describe("CostWorkflowService", () => {
     });
 
     // Generate Q01 report
+    costService.updateCostData({ ...costData, materials: costData.materials.map((material) =>
+      material.id === input.materialId ? { ...material, density: Number.MAX_VALUE, purchasePrice: Number.MAX_VALUE } : material) });
+    expect(() => costService.createCostReport(input, "2026-08-18T01:05:00.000Z")).toThrow(/overflowed/);
+    expect(costService.listCostReportsByRevision(drawing.id, revision.id)).toHaveLength(0);
+    costService.updateCostData(costData);
+    expect(() => new CostWorkflowService(repo, runs).createCostReport(input, "2026-08-18T01:05:00.000Z")).toThrow(/MODEL_GEOMETRY_UNAVAILABLE/);
     const report1 = costService.createCostReport(input, "2026-08-18T01:05:00.000Z");
     expect(report1.label).toBe("Q01");
     expect(report1.quantity).toBe(5);
     expect(report1.result.perPieceCost).toBeGreaterThan(0);
     expect(report1.result.totalCost).toBeGreaterThan(0);
+    // Client-supplied geometry, prices and calculation metadata cannot override server evidence.
+    const forged = costService.createCostReport({ ...input, finishedVolume: 999,
+      costData: { ...costData, materials: [] }, formulaVersion: "forged", capturedAt: "forged" }, "2026-08-18T01:05:01.000Z");
+    expect(forged.snapshot.input.finishedVolume).toBe(0.031);
+    expect(forged.snapshot.input.costData.materials).toEqual(costData.materials);
+    expect(forged.snapshot.input.capturedAt).toBe("2026-08-18T01:05:01.000Z");
+    costService.deleteCostReport(forged.costReportId, revision.id);
 
     // List reports for revision
     const list = costService.listCostReportsByRevision(drawing.id, revision.id);
@@ -186,6 +202,27 @@ describe("CostWorkflowService", () => {
     const report2 = costService.createCostReport(input2, "2026-08-18T02:05:00.000Z");
     expect(report2.label).toBe("Q02");
     expect(report2.result.perPieceCost).toBeGreaterThan(report1.result.perPieceCost);
+
+    // Deleting Q01 must not overwrite Q02 or reuse a deleted report's identity.
+    costService.deleteCostReport(report1.costReportId, revision.id);
+    const report3 = costService.createCostReport(input2, "2026-08-18T02:06:00.000Z");
+    expect(report3.label).toBe("Q03");
+    expect(report3.costReportId).not.toBe(report1.costReportId);
+    expect(costService.getCostReportDetail(report2.costReportId).result).toEqual(report2.result);
+
+    // BE-12: quantity is capped.
+    expect(() => costService.createCostReport({ ...input2, quantity: 1_000_001 }, "2026-08-18T02:07:00.000Z")).toThrow(
+      /not greater than/
+    );
+    // BE-11: a unit glued to the number is parsed once, by the shared parser, and
+    // the frozen rawStockVolume is the real volume (never a 1e-9 mm fallback).
+    const glued = costService.createCostReport({ ...input2, stockSpec: "Ø0.32×0.82m" }, "2026-08-18T02:08:00.000Z");
+    expect(glued.result.rawStockVolume).toBeCloseTo((Math.PI * 0.16 * 0.16 * 0.82), 9);
+    const gluedMm = costService.createCostReport({ ...input2, stockSpec: "Ø320×820MM" }, "2026-08-18T02:09:00.000Z");
+    expect(gluedMm.result.rawStockVolume).toBeCloseTo(Math.PI * 0.16 * 0.16 * 0.82, 9);
+    expect(() => costService.createCostReport({ ...input2, stockSpec: "Ø320×820" }, "2026-08-18T02:10:00.000Z")).toThrow(
+      /explicit positive dimensions/
+    );
   });
 
   it("deletes a Cost Report of its owning Revision and guards the identity pair", () => {

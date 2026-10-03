@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -16,6 +16,7 @@ import {
 } from "../errors.js";
 import { DrawingFileLedger, DRAWING_LIBRARY_RELATIVE_DIR } from "../ledger/drawing-file-ledger.js";
 import { DrawingWorkflowService } from "./drawing-workflow-service.js";
+import { BusinessDeletionService } from "./business-deletion-service.js";
 import { makeTempDir, removeTempDir, samplePdfBytes, sha256Of } from "../test-utils.js";
 
 function makeSource(sourceDir: string, name: string, content: Buffer = samplePdfBytes()): string {
@@ -849,6 +850,183 @@ describe("revision cascade protection (Phase 8)", () => {
         }) as object
       })
     );
+  });
+
+  it("does not fail a committed Revision deletion when the source file cannot be removed (BE-14)", () => {
+    const { imported, added } = importWithTwoRevisions("PDJF-CASC-CLEANUP");
+    const relativePath = added.revision.sourceFile.relativePath;
+    const spy = vi.spyOn(ledger, "deleteOwnedFile").mockImplementationOnce(() => {
+      throw new Error("EBUSY: resource busy or locked");
+    });
+    try {
+      const result = drawingService.deleteRevision({
+        drawingId: imported.drawing.id,
+        revisionId: added.revision.id,
+        updatedAt: "2026-08-12T06:50:00.000Z"
+      });
+      expect(result.deletedRevisionId).toBe(added.revision.id);
+      expect(result.cleanupWarnings).toHaveLength(1);
+    } finally {
+      spy.mockRestore();
+    }
+    // The DB deletion is committed and the cleanup intent is durably queued.
+    expect(drawingService.getDrawingHistory(imported.drawing.id).revisions).toHaveLength(1);
+    const queued = JSON.parse(
+      (db.prepare("SELECT value FROM settings WHERE key = 'business_deletion_cleanup'").get() as { value: string }).value
+    ) as Array<{ kind: string; relativePath: string }>;
+    expect(queued).toContainEqual({ kind: "source", relativePath });
+    expect(existsSync(ledger.toAbsolute(relativePath))).toBe(true);
+
+    // The shared retry loop finishes the job and empties the queue.
+    expect(new BusinessDeletionService(db, ledger, () => null).retryCleanup()).toEqual([]);
+    expect(existsSync(ledger.toAbsolute(relativePath))).toBe(false);
+    const after = JSON.parse(
+      (db.prepare("SELECT value FROM settings WHERE key = 'business_deletion_cleanup'").get() as { value: string }).value
+    ) as unknown[];
+    expect(after).toEqual([]);
+  });
+
+  it("leaves no cleanup intent behind after a clean Revision deletion", () => {
+    const { imported, added } = importWithTwoRevisions("PDJF-CASC-CLEAN");
+    const result = drawingService.deleteRevision({
+      drawingId: imported.drawing.id,
+      revisionId: added.revision.id,
+      updatedAt: "2026-08-12T06:50:00.000Z"
+    });
+    expect(result.cleanupWarnings).toBeUndefined();
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'business_deletion_cleanup'").get() as
+      | { value: string }
+      | undefined;
+    expect(row === undefined ? [] : (JSON.parse(row.value) as unknown[])).toEqual([]);
+  });
+
+  it("stamps Facts and Feedback with the SERVER clock and keeps them in the next Run snapshot (BE-03)", () => {
+    const { imported } = importWithTwoRevisions("PDJF-SERVERCLOCK");
+    const serverNow = new Date("2026-10-03T00:00:00.000Z");
+    const service = new DrawingWorkflowService(repo, ledger, runs, () => serverNow);
+    const fact = service.addRevisionFact({
+      drawingId: imported.drawing.id,
+      revisionId: imported.revision.id,
+      field: "材料",
+      value: "42CrMo",
+      source: "USER_SUPPLEMENT",
+      // A browser clock far in the future (or garbage) must not matter.
+      createdAt: "2099-01-01T00:00:00.000Z"
+    });
+    const garbage = service.addRevisionFact({
+      drawingId: imported.drawing.id,
+      revisionId: imported.revision.id,
+      field: "热处理",
+      value: "调质",
+      source: "USER_SUPPLEMENT",
+      createdAt: "abc"
+    });
+    const feedback = service.addModelingFeedback({
+      drawingId: imported.drawing.id,
+      revisionId: imported.revision.id,
+      content: "保留端面台阶",
+      createdAt: "not-a-date"
+    });
+    expect(fact.createdAt).toBe("2026-10-03T00:00:00.000Z");
+    expect(garbage.createdAt).toBe("2026-10-03T00:00:00.000Z");
+    expect(feedback.createdAt).toBe("2026-10-03T00:00:00.000Z");
+
+    const run = runs.createRun({
+      drawingId: imported.drawing.id,
+      revisionId: imported.revision.id,
+      profile: CASCADE_PROFILE,
+      createdAt: "2026-10-03T00:00:01.000Z"
+    });
+    expect(run.inputSnapshot.revisionFacts.map((entry) => entry.field).sort()).toEqual(["材料", "热处理"]);
+    expect(run.inputSnapshot.modelingFeedback).toHaveLength(1);
+  });
+
+  it("keeps memory with an unparseable legacy timestamp in the Run snapshot instead of dropping it (BE-03)", () => {
+    const { imported } = importWithTwoRevisions("PDJF-LEGACYTS");
+    repo.insertRevisionFact({
+      id: "fact-legacy-nan",
+      revisionId: imported.revision.id,
+      field: "旧数据",
+      value: "x",
+      source: "USER_SUPPLEMENT",
+      createdAt: "legacy-garbage"
+    });
+    repo.insertRevisionFact({
+      id: "fact-future",
+      revisionId: imported.revision.id,
+      field: "未来",
+      value: "y",
+      source: "USER_SUPPLEMENT",
+      createdAt: "2999-01-01T00:00:00.000Z"
+    });
+    const run = createRun(imported.drawing.id, imported.revision.id);
+    const fields = run.inputSnapshot.revisionFacts.map((entry) => entry.field);
+    expect(fields).toContain("旧数据");
+    expect(fields).not.toContain("未来");
+  });
+
+  it("derives real library status fields in ONE aggregate read (UX-03)", () => {
+    const { imported, added } = importWithTwoRevisions("PDJF-LISTSTATUS");
+    const find = () =>
+      repo.getWorkspaceDashboard().recentDrawings.find((item) => item.drawingId === imported.drawing.id);
+    expect(find()).toMatchObject({
+      currentApprovedModelId: null,
+      runStatus: null,
+      hasOpenClarification: false,
+      hasPendingReview: false,
+      totalRevisionCount: 2,
+      currentRevisionLabel: "V1",
+      latestRevisionLabel: "V2"
+    });
+
+    // A Run on a NON-current Revision does not change the library status.
+    createRun(imported.drawing.id, added.revision.id);
+    expect(find()?.runStatus).toBeNull();
+
+    const run = createRun(imported.drawing.id, imported.revision.id);
+    expect(find()?.runStatus).toBe("QUEUED");
+
+    seedModel(imported.drawing.id, imported.revision.id, run.id, "model-liststatus");
+    expect(find()?.hasPendingReview).toBe(true);
+
+    db.prepare(
+      "INSERT INTO clarification_requests (id, run_id, revision_id, status, created_at) VALUES (?, ?, ?, 'OPEN', ?)"
+    ).run("clar-liststatus", run.id, imported.revision.id, "2026-08-12T06:30:00.000Z");
+    expect(find()?.hasOpenClarification).toBe(true);
+    db.prepare("UPDATE clarification_requests SET status = 'ANSWERED' WHERE id = ?").run("clar-liststatus");
+    expect(find()?.hasOpenClarification).toBe(false);
+
+    db.prepare("UPDATE models SET review_status = 'APPROVED' WHERE id = ?").run("model-liststatus");
+    db.prepare("UPDATE drawing_revisions SET current_approved_model_id = ? WHERE id = ?").run(
+      "model-liststatus",
+      imported.revision.id
+    );
+    expect(find()).toMatchObject({ currentApprovedModelId: "model-liststatus", hasPendingReview: false });
+  });
+
+  it("exposes every pending review (with revisionId) and every open clarification, untruncated (UX-04)", () => {
+    const { imported } = importWithTwoRevisions("PDJF-DASHFULL");
+    const run = createRun(imported.drawing.id, imported.revision.id);
+    seedModel(imported.drawing.id, imported.revision.id, run.id, "model-dash-1");
+    const run2 = createRun(imported.drawing.id, imported.revision.id);
+    for (const [index, runId] of [run.id, run2.id].entries()) {
+      db.prepare(
+        "INSERT INTO clarification_requests (id, run_id, revision_id, status, created_at) VALUES (?, ?, ?, 'OPEN', ?)"
+      ).run(`clar-dash-${index}`, runId, imported.revision.id, `2026-08-12T06:3${index}:00.000Z`);
+      db.prepare("INSERT INTO clarification_questions (id, request_id, sort_order, payload_json) VALUES (?, ?, 1, '{}')").run(
+        `q-dash-${index}`,
+        `clar-dash-${index}`
+      );
+    }
+    const reviews = runs.listPendingReviewItems().filter((item) => item.drawingId === imported.drawing.id);
+    expect(reviews).toEqual([
+      expect.objectContaining({ modelId: "model-dash-1", revisionId: imported.revision.id, revisionLabel: "V1" })
+    ]);
+    const clarifications = runs
+      .listPendingClarificationItems()
+      .filter((item) => item.drawingId === imported.drawing.id);
+    expect(clarifications.map((item) => item.runId)).toEqual([run.id, run2.id]);
+    expect(clarifications[0]).toMatchObject({ drawingNumber: "PDJF-DASHFULL", revisionLabel: "V1", openQuestionCount: 1 });
   });
 });
 

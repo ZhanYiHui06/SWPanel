@@ -5,7 +5,16 @@ import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 export type CellContent = ReactNode;
 
 /** Cell class hint, matching prototype column helpers. */
-export type CellClass = "mono" | "date" | "result" | "result-muted" | "version";
+export type CellClass =
+  | "mono"
+  | "date"
+  | "result"
+  | "result-muted"
+  | "version"
+  /** Right-aligned tabular figures for quantities and amounts. */
+  | "numeric"
+  /** Right-aligned, non-wrapping action buttons. */
+  | "actions";
 
 /**
  * DataTable column definition. The `align` and `width` helpers map to the
@@ -44,7 +53,9 @@ const cellClassMap: Partial<Record<CellClass, string>> = {
   date: "col-date",
   result: "col-result",
   "result-muted": "col-result-muted",
-  version: "col-version"
+  version: "col-version",
+  numeric: "col-numeric",
+  actions: "col-actions"
 };
 
 const alignClassMap: Record<NonNullable<DataTableColumn["align"]>, string> = {
@@ -52,6 +63,14 @@ const alignClassMap: Record<NonNullable<DataTableColumn["align"]>, string> = {
   right: "col-right",
   center: ""
 };
+
+/** Header cells follow the column's alignment so labels sit over right-aligned values. */
+function headerAlignClass(column: DataTableColumn): string | undefined {
+  if (column.align === "right" || column.cellClass === "numeric" || column.cellClass === "actions") {
+    return "col-right";
+  }
+  return undefined;
+}
 
 const interactiveSelector =
   "a, button, input, select, textarea, summary, [role='button'], [role='link'], [contenteditable='true']";
@@ -82,6 +101,7 @@ export function DataTable({
               <th
                 key={index}
                 scope="col"
+                className={headerAlignClass(column)}
                 style={column.width !== undefined ? { width: column.width } : undefined}
               >
                 {column.header}

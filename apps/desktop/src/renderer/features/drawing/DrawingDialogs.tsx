@@ -15,19 +15,20 @@
  */
 
 import { useState } from "react";
-import { Button, CloseIcon, FormField, InlineNotice, TextInput } from "@swpanel/ui";
+import { Button, CloseIcon, Dialog, FormField, InlineNotice, TextInput } from "@swpanel/ui";
 
+import { describeError } from "../error-messages.js";
 import { formatBytes } from "../format.js";
+import { runStatusLabel } from "../status.js";
 import { useNotifications } from "../notifications/notification-context.js";
 import {
-  toDrawingRepositoryError,
   type AddRevisionResult,
   type DrawingRepository,
   type ImportDrawingResult,
   type SelectedDrawingFileInput
 } from "../bridge-repository/drawing-repository.js";
-import { toRunRepositoryError, type RunRepository } from "../run-repository/run-repository.js";
-import { toCostRepositoryError, type CostRepository } from "../cost-repository/cost-repository.js";
+import { type RunRepository } from "../run-repository/run-repository.js";
+import { type CostRepository } from "../cost-repository/cost-repository.js";
 
 /** Joins 1-3 dependency labels with the Chinese enumeration conjunction. */
 function joinChineseList(parts: readonly string[]): string {
@@ -54,6 +55,22 @@ export interface ImportDrawingDialogProps {
   readonly onCancel: () => void;
   /** Called once the Drawing was imported (the page invalidates and navigates). */
   readonly onImported: (result: ImportDrawingResult) => void;
+}
+
+/** Server-side upload limit (kept in sync with the web server's 20 MiB cap). */
+export const MAX_DRAWING_FILE_BYTES = 20 * 1024 * 1024;
+const ACCEPTED_DRAWING_FORMATS: readonly string[] = ["PDF", "DWG", "DXF"];
+
+/** Front-end pre-check of a picked file; returns a Chinese message or null. */
+export function checkPickedDrawingFile(file: SelectedDrawingFileInput): string | null {
+  const extension = file.fileName.includes(".") ? file.fileName.split(".").pop()?.toUpperCase() ?? "" : "";
+  if (!ACCEPTED_DRAWING_FORMATS.includes(String(file.format).toUpperCase()) && !ACCEPTED_DRAWING_FORMATS.includes(extension)) {
+    return "仅支持 PDF、DWG 和 DXF 格式的图纸，请重新选择文件。";
+  }
+  if (file.sizeBytes > MAX_DRAWING_FILE_BYTES) {
+    return `文件大小为 ${formatBytes(file.sizeBytes)}，超过 20 MB 上限，请压缩或拆分后重新选择。`;
+  }
+  return null;
 }
 
 function SelectedFileSummary({
@@ -100,9 +117,13 @@ export function ImportDrawingDialog({
     setError(null);
     try {
       const picked = await repository.selectDrawingFile();
-      if (picked !== null) setFile(picked);
+      if (picked !== null) {
+        const problem = checkPickedDrawingFile(picked);
+        if (problem === null) setFile(picked);
+        else setError(problem);
+      }
     } catch (caught) {
-      setError(toDrawingRepositoryError(caught).message);
+      setError(describeError(caught).message);
     } finally {
       setPicking(false);
     }
@@ -127,71 +148,71 @@ export function ImportDrawingDialog({
       });
       onImported(result);
     } catch (caught) {
-      setError(toDrawingRepositoryError(caught).message);
+      const described = describeError(caught);
+      if (described.code === "TOKEN_NOT_FOUND") setFile(null);
+      setError(described.message);
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="dialog-overlay" role="presentation">
-      <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="import-drawing-dialog-title">
-        <div className="dialog-header">
-          <div id="import-drawing-dialog-title" className="dialog-title">上传图纸</div>
-        </div>
-        <div className="dialog-body">
-          {file === null ? (
-            <>
-              <p className="dialog-text">
-                选择要导入的工程图纸文件（PDF / DWG / DXF）。导入后会创建一张新图纸及其首个版本，不会创建建模任务。
-              </p>
-              <Button variant="secondary" onClick={() => void pickFile()} disabled={picking}>
-                {picking ? "正在选择…" : "选择图纸文件"}
-              </Button>
-            </>
-          ) : (
-            <>
-              <SelectedFileSummary
-                file={file}
-                onReselect={() => void pickFile()}
-                reselectDisabled={picking || submitting}
-              />
-              <FormField label="图号" htmlFor="import-drawing-number" required hint="例如 PDJF480.01.17C-4">
-                <TextInput
-                  value={drawingNumber}
-                  onValueChange={setDrawingNumber}
-                  mono
-                  placeholder="请输入图纸编号"
-                  inputProps={{ id: "import-drawing-number", autoComplete: "off" }}
-                />
-              </FormField>
-              <FormField label="名称" htmlFor="import-drawing-name" required hint="图纸的显示名称">
-                <TextInput
-                  value={name}
-                  onValueChange={setName}
-                  placeholder="请输入图纸名称"
-                  inputProps={{ id: "import-drawing-name", autoComplete: "off" }}
-                />
-              </FormField>
-            </>
-          )}
-          {error !== null && (
-            <InlineNotice tone="error" title="无法导入图纸" className="mt-4">
-              {error}
-            </InlineNotice>
-          )}
-        </div>
-        <div className="dialog-footer">
-          <Button variant="ghost" onClick={onCancel} disabled={submitting}>
-            <CloseIcon aria-hidden="true" />取消
-          </Button>
-          {file !== null && (
-            <Button variant="primary" onClick={() => void submit()} disabled={submitting || !numberReady || !nameReady}>
-              {submitting ? "正在导入…" : "导入图纸"}
+    <Dialog labelledBy="import-drawing-dialog-title" onClose={onCancel} dismissible={!submitting}>
+      <div className="dialog-header">
+        <h2 id="import-drawing-dialog-title" className="dialog-title">上传图纸</h2>
+      </div>
+      <div className="dialog-body">
+        {file === null ? (
+          <>
+            <p className="dialog-text">
+              选择要导入的工程图纸文件（PDF / DWG / DXF）。导入后会创建一张新图纸及其首个版本，不会创建建模任务。
+            </p>
+            <Button variant="secondary" onClick={() => void pickFile()} disabled={picking}>
+              {picking ? "正在选择并上传…" : "选择图纸文件"}
             </Button>
-          )}
-        </div>
-      </section>
-    </div>
+          </>
+        ) : (
+          <>
+            <SelectedFileSummary
+              file={file}
+              onReselect={() => void pickFile()}
+              reselectDisabled={picking || submitting}
+            />
+            <FormField label="图号" htmlFor="import-drawing-number" required hint="例如 PDJF480.01.17C-4">
+              <TextInput
+                value={drawingNumber}
+                onValueChange={setDrawingNumber}
+                mono
+                placeholder="请输入图纸编号"
+                inputProps={{ id: "import-drawing-number", autoComplete: "off" }}
+              />
+            </FormField>
+            <FormField label="名称" htmlFor="import-drawing-name" required hint="图纸的显示名称">
+              <TextInput
+                value={name}
+                onValueChange={setName}
+                placeholder="请输入图纸名称"
+                inputProps={{ id: "import-drawing-name", autoComplete: "off" }}
+              />
+            </FormField>
+          </>
+        )}
+        {error !== null && (
+          <InlineNotice tone="error" title="无法导入图纸" className="mt-4">
+            {error}
+          </InlineNotice>
+        )}
+      </div>
+      <div className="dialog-footer">
+        <Button variant="ghost" onClick={onCancel} disabled={submitting}>
+          <CloseIcon aria-hidden="true" />取消
+        </Button>
+        {file !== null && (
+          <Button variant="primary" onClick={() => void submit()} disabled={submitting || !numberReady || !nameReady}>
+            {submitting ? "正在导入…" : "导入图纸"}
+          </Button>
+        )}
+      </div>
+    </Dialog>
   );
 }
 
@@ -252,53 +273,51 @@ export function DeleteRevisionDialog({
       });
       onDeleted(result.deletedRevisionId);
     } catch (caught) {
-      setError(toDrawingRepositoryError(caught).message);
+      setError(describeError(caught).message);
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="dialog-overlay" role="presentation">
-      <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="delete-revision-dialog-title">
-        <div className="dialog-header">
-          <div id="delete-revision-dialog-title" className="dialog-title">删除版本</div>
-        </div>
-        <div className="dialog-body">
-          {blocked ? (
-            <InlineNotice tone="warning" title="无法删除该版本">
-              {blockingMessage}
-              <div className="mt-4">
-                如需删除，请先移除该版本下的模型、建模记录和成本报告。
-              </div>
-            </InlineNotice>
-          ) : (
-            <>
-              <p className="dialog-text">
-                确认删除版本 <strong className="text-mono">{revisionLabel}</strong>
-                {sourceFileName !== undefined && sourceFileName.length > 0 ? `（${sourceFileName}）` : ""}？
-              </p>
-              <p className="dialog-text">
-                该版本的工程事实、建模反馈和源文件将一并删除，操作不可撤销。
-                当前版本不会被删除（受保护）。
-              </p>
-            </>
-          )}
-          {error !== null && (
-            <InlineNotice tone="error" title="无法删除版本" className="mt-4">
-              {error}
-            </InlineNotice>
-          )}
-        </div>
-        <div className="dialog-footer">
-          <Button variant="ghost" onClick={onCancel} disabled={submitting}>
-            <CloseIcon aria-hidden="true" />取消
-          </Button>
-          <Button variant="primary" onClick={() => void submit()} disabled={submitting || blocked}>
-            {submitting ? "正在删除…" : "确认删除版本"}
-          </Button>
-        </div>
-      </section>
-    </div>
+    <Dialog labelledBy="delete-revision-dialog-title" onClose={onCancel} dismissible={!submitting}>
+      <div className="dialog-header">
+        <h2 id="delete-revision-dialog-title" className="dialog-title">删除版本</h2>
+      </div>
+      <div className="dialog-body">
+        {blocked ? (
+          <InlineNotice tone="warning" title="无法删除该版本">
+            {blockingMessage}
+            <div className="mt-4">
+              如需删除，请先移除该版本下的模型、建模记录和成本报告。
+            </div>
+          </InlineNotice>
+        ) : (
+          <>
+            <p className="dialog-text">
+              确认删除版本 <strong className="text-mono">{revisionLabel}</strong>
+              {sourceFileName !== undefined && sourceFileName.length > 0 ? `（${sourceFileName}）` : ""}？
+            </p>
+            <p className="dialog-text">
+              该版本的工程事实、建模反馈和源文件将一并删除，操作不可撤销。
+              当前版本不会被删除（受保护）。
+            </p>
+          </>
+        )}
+        {error !== null && (
+          <InlineNotice tone="error" title="无法删除版本" className="mt-4">
+            {error}
+          </InlineNotice>
+        )}
+      </div>
+      <div className="dialog-footer">
+        <Button variant="ghost" onClick={onCancel} disabled={submitting}>
+          <CloseIcon aria-hidden="true" />取消
+        </Button>
+        <Button variant="danger" onClick={() => void submit()} disabled={submitting || blocked}>
+          {submitting ? "正在删除…" : "确认删除版本"}
+        </Button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -326,9 +345,13 @@ export function AddRevisionDialog({
     setError(null);
     try {
       const picked = await repository.selectDrawingFile();
-      if (picked !== null) setFile(picked);
+      if (picked !== null) {
+        const problem = checkPickedDrawingFile(picked);
+        if (problem === null) setFile(picked);
+        else setError(problem);
+      }
     } catch (caught) {
-      setError(toDrawingRepositoryError(caught).message);
+      setError(describeError(caught).message);
     } finally {
       setPicking(false);
     }
@@ -345,55 +368,55 @@ export function AddRevisionDialog({
       const result = await repository.addRevision({ drawingId, file });
       onAdded(result);
     } catch (caught) {
-      setError(toDrawingRepositoryError(caught).message);
+      const described = describeError(caught);
+      if (described.code === "TOKEN_NOT_FOUND") setFile(null);
+      setError(described.message);
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="dialog-overlay" role="presentation">
-      <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="add-revision-dialog-title">
-        <div className="dialog-header">
-          <div id="add-revision-dialog-title" className="dialog-title">新增版本</div>
-        </div>
-        <div className="dialog-body">
-          {file === null ? (
-            <>
-              <p className="dialog-text">
-                选择新版本的工程图纸文件。新增版本不会自动设为当前版本，也不会创建建模任务。
-              </p>
-              <Button variant="secondary" onClick={() => void pickFile()} disabled={picking}>
-                {picking ? "正在选择…" : "选择图纸文件"}
-              </Button>
-            </>
-          ) : (
-            <>
-              <SelectedFileSummary
-                file={file}
-                onReselect={() => void pickFile()}
-                reselectDisabled={picking || submitting}
-              />
-              <p className="dialog-text">确认后将基于该文件创建下一个版本。</p>
-            </>
-          )}
-          {error !== null && (
-            <InlineNotice tone="error" title="无法新增版本" className="mt-4">
-              {error}
-            </InlineNotice>
-          )}
-        </div>
-        <div className="dialog-footer">
-          <Button variant="ghost" onClick={onCancel} disabled={submitting}>
-            <CloseIcon aria-hidden="true" />取消
-          </Button>
-          {file !== null && (
-            <Button variant="primary" onClick={() => void submit()} disabled={submitting}>
-              {submitting ? "正在新增…" : "确认新增版本"}
+    <Dialog labelledBy="add-revision-dialog-title" onClose={onCancel} dismissible={!submitting}>
+      <div className="dialog-header">
+        <h2 id="add-revision-dialog-title" className="dialog-title">新增版本</h2>
+      </div>
+      <div className="dialog-body">
+        {file === null ? (
+          <>
+            <p className="dialog-text">
+              选择新版本的工程图纸文件。新增版本不会自动设为当前版本，也不会创建建模任务。
+            </p>
+            <Button variant="secondary" onClick={() => void pickFile()} disabled={picking}>
+              {picking ? "正在选择并上传…" : "选择图纸文件"}
             </Button>
-          )}
-        </div>
-      </section>
-    </div>
+          </>
+        ) : (
+          <>
+            <SelectedFileSummary
+              file={file}
+              onReselect={() => void pickFile()}
+              reselectDisabled={picking || submitting}
+            />
+            <p className="dialog-text">确认后将基于该文件创建下一个版本。</p>
+          </>
+        )}
+        {error !== null && (
+          <InlineNotice tone="error" title="无法新增版本" className="mt-4">
+            {error}
+          </InlineNotice>
+        )}
+      </div>
+      <div className="dialog-footer">
+        <Button variant="ghost" onClick={onCancel} disabled={submitting}>
+          <CloseIcon aria-hidden="true" />取消
+        </Button>
+        {file !== null && (
+          <Button variant="primary" onClick={() => void submit()} disabled={submitting}>
+            {submitting ? "正在新增…" : "确认新增版本"}
+          </Button>
+        )}
+      </div>
+    </Dialog>
   );
 }
 
@@ -443,40 +466,38 @@ export function DeleteRunDialog({
       });
       onDeleted();
     } catch (caught) {
-      setError(toRunRepositoryError(caught).message);
+      setError(describeError(caught).message);
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="dialog-overlay" role="presentation">
-      <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="delete-run-dialog-title">
-        <div className="dialog-header">
-          <div id="delete-run-dialog-title" className="dialog-title">删除记录</div>
-        </div>
-        <div className="dialog-body">
-          <p className="dialog-text">
-            确认删除 Run <strong className="text-mono">{run.runLabel}</strong>？（状态：{run.status}）
-          </p>
-          <p className="dialog-text">
-            该任务的建模记录与相关事件历史将一并删除，操作不可撤销。
-          </p>
-          {error !== null && (
-            <InlineNotice tone="error" title="无法删除 Run" className="mt-4">
-              {error}
-            </InlineNotice>
-          )}
-        </div>
-        <div className="dialog-footer">
-          <Button variant="ghost" onClick={onCancel} disabled={submitting}>
-            <CloseIcon aria-hidden="true" />取消
-          </Button>
-          <Button variant="primary" onClick={() => void submit()} disabled={submitting}>
-            {submitting ? "正在删除…" : "确认删除记录"}
-          </Button>
-        </div>
-      </section>
-    </div>
+    <Dialog labelledBy="delete-run-dialog-title" onClose={onCancel} dismissible={!submitting}>
+      <div className="dialog-header">
+        <h2 id="delete-run-dialog-title" className="dialog-title">删除记录</h2>
+      </div>
+      <div className="dialog-body">
+        <p className="dialog-text">
+          确认删除 Run <strong className="text-mono">{run.runLabel}</strong>？（状态：{runStatusLabel(run.status)}）
+        </p>
+        <p className="dialog-text">
+          该任务的建模记录、事件历史、生成的模型、审核、模型文件及关联成本报告将一并删除；当前正式模型指针会清空。原图与版本补充资料保留。操作不可撤销。
+        </p>
+        {error !== null && (
+          <InlineNotice tone="error" title="无法删除 Run" className="mt-4">
+            {error}
+          </InlineNotice>
+        )}
+      </div>
+      <div className="dialog-footer">
+        <Button variant="ghost" onClick={onCancel} disabled={submitting}>
+          <CloseIcon aria-hidden="true" />取消
+        </Button>
+        <Button variant="danger" onClick={() => void submit()} disabled={submitting}>
+          {submitting ? "正在删除…" : "确认删除记录"}
+        </Button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -520,41 +541,39 @@ export function DeleteCostReportDialog({
       });
       onDeleted();
     } catch (caught) {
-      setError(toCostRepositoryError(caught).message);
+      setError(describeError(caught).message);
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="dialog-overlay" role="presentation">
-      <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="delete-report-dialog-title">
-        <div className="dialog-header">
-          <div id="delete-report-dialog-title" className="dialog-title">删除报告</div>
-        </div>
-        <div className="dialog-body">
-          <p className="dialog-text">
-            确认删除成本测算报告{" "}
-            <strong className="text-mono">{reportLabel !== undefined ? reportLabel : costReportId}</strong>
-            ？
-          </p>
-          <p className="dialog-text">
-            该报告的估算快照与测算结果将一并删除，操作不可撤销。
-          </p>
-          {error !== null && (
-            <InlineNotice tone="error" title="无法删除报告" className="mt-4">
-              {error}
-            </InlineNotice>
-          )}
-        </div>
-        <div className="dialog-footer">
-          <Button variant="ghost" onClick={onCancel} disabled={submitting}>
-            <CloseIcon aria-hidden="true" />取消
-          </Button>
-          <Button variant="primary" onClick={() => void submit()} disabled={submitting}>
-            {submitting ? "正在删除…" : "确认删除报告"}
-          </Button>
-        </div>
-      </section>
-    </div>
+    <Dialog labelledBy="delete-report-dialog-title" onClose={onCancel} dismissible={!submitting}>
+      <div className="dialog-header">
+        <h2 id="delete-report-dialog-title" className="dialog-title">删除报告</h2>
+      </div>
+      <div className="dialog-body">
+        <p className="dialog-text">
+          确认删除成本测算报告{" "}
+          <strong className="text-mono">{reportLabel !== undefined ? reportLabel : costReportId}</strong>
+          ？
+        </p>
+        <p className="dialog-text">
+          该报告的估算快照与测算结果将一并删除，操作不可撤销。
+        </p>
+        {error !== null && (
+          <InlineNotice tone="error" title="无法删除报告" className="mt-4">
+            {error}
+          </InlineNotice>
+        )}
+      </div>
+      <div className="dialog-footer">
+        <Button variant="ghost" onClick={onCancel} disabled={submitting}>
+          <CloseIcon aria-hidden="true" />取消
+        </Button>
+        <Button variant="danger" onClick={() => void submit()} disabled={submitting}>
+          {submitting ? "正在删除…" : "确认删除报告"}
+        </Button>
+      </div>
+    </Dialog>
   );
 }

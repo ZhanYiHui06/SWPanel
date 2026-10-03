@@ -13,11 +13,13 @@ export const IPC_PROTOCOL_VERSION = 1 as const;
 export const QUERY_NAMES = [
   "drawing.getDetail",
   "drawing.getHistory",
+  "drawing.getDeletionImpact",
   "revision.getDetail",
   "revision.getHistory",
   "run.getDetail",
   "run.list",
   "model.getDetail",
+  "model.getDeletionImpact",
   "clarification.get",
   "costReport.getDetail",
   "costReport.listByRevision",
@@ -29,6 +31,8 @@ export type QueryName = (typeof QUERY_NAMES)[number];
 
 /** Query request payloads. */
 export type QueryRequest =
+  | { name: "drawing.getDeletionImpact"; payload: { drawingId: string } }
+  | { name: "model.getDeletionImpact"; payload: { modelId: string } }
   | { name: "drawing.getDetail"; payload: { drawingId: string } }
   | { name: "drawing.getHistory"; payload: { drawingId: string } }
   | { name: "revision.getDetail"; payload: { drawingId: string; revisionId: string } }

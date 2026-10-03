@@ -51,6 +51,17 @@ describe("NotificationDrawer", () => {
     expect(screen.getByText("共 2 条未读通知")).toBeInTheDocument();
   });
 
+  it("is a modal dialog that closes on Escape and keeps focus inside", async () => {
+    renderDrawer();
+    const dialog = await screen.findByRole("dialog", { name: "通知中心" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "通知中心" })).toBeNull();
+  });
+
   it("shows the empty state when there are no notifications", async () => {
     render(
       <MemoryRouter>

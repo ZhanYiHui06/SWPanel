@@ -1,5 +1,5 @@
-import { Button, Card, CardBody, CardHeader, CardTitle, CloseIcon, DownloadIcon, InlineNotice, PlayIcon, PropertyList, StatusBadge } from "@swpanel/ui";
-import { useEffect, useState } from "react";
+import { Button, Card, CardBody, CardHeader, CardTitle, CloseIcon, Dialog, DownloadIcon, InlineNotice, PlayIcon, PlusIcon, PropertyList, StatusBadge } from "@swpanel/ui";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
 import type { DrawingHistoryView } from "@swpanel/contracts";
@@ -11,10 +11,10 @@ import {
   useDrawingRepository
 } from "../features/bridge-repository/drawing-repository-provider.js";
 import { useRunInvalidate, useRunRepository } from "../features/run-repository/run-repository-provider.js";
-import { toRunRepositoryError } from "../features/run-repository/run-repository.js";
+import { describeError } from "../features/error-messages.js";
+import { RunStatusBadge } from "../features/runs/RunStatusBadge.js";
 import {
   isNotFoundError,
-  toDrawingRepositoryError,
   type AddRevisionResult,
   type DrawingRepository
 } from "../features/bridge-repository/drawing-repository.js";
@@ -22,8 +22,9 @@ import { DrawingWorkspace } from "../features/drawing/DrawingWorkspace.js";
 import { AddRevisionDialog, DeleteRevisionDialog } from "../features/drawing/DrawingDialogs.js";
 import { QueryErrorState, QueryLoadingState } from "../features/drawing/DrawingQueryStates.js";
 import { formatBytes, formatRelativeTime } from "../features/format.js";
+import { useModelDetailQuery, useModelRepository } from "../features/model-repository/model-repository-provider.js";
 import { ModelPreview } from "../features/models/ModelPreview.js";
-import { modelStatusBadge, modelStatusLabel, runStatusLabel } from "../features/status.js";
+import { modelStatusBadge, modelStatusLabel } from "../features/status.js";
 import "../styles/phase1-pages.css";
 
 const DISPLAY_NOW = new Date("2026-08-10T23:40:00.000Z");
@@ -58,8 +59,11 @@ function safeHistorySourceFile(
  * truthfully disabled (with an explanation) in the bridge runtime where the
  * Run orchestration has not landed yet.
  */
-export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: DrawingOverviewPageProps): React.JSX.Element {
+export function DrawingOverviewPage({ now: nowProp, drawingRepository }: DrawingOverviewPageProps): React.JSX.Element {
   const repository = useDrawingRepository(drawingRepository);
+  // Fixture date only in mock mode; real data is relative to the real clock.
+  const now = nowProp ?? (repository.mode === "mock" ? DISPLAY_NOW : new Date());
+  const dispatchingRef = useRef(false);
   const invalidate = useDrawingInvalidate();
   const runRepository = useRunRepository();
   const invalidateRuns = useRunInvalidate();
@@ -69,7 +73,7 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
   const [creatingRun, setCreatingRun] = useState(false);
   const [dispatchedRun, setDispatchedRun] = useState<{ number: string; id: string } | null>(null);
   const [addRevisionOpen, setAddRevisionOpen] = useState(false);
-  const [settingCurrent, setSettingCurrent] = useState(false);
+  const [settingCurrent, setSettingCurrent] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{
     revisionId: string;
     revisionLabel: string;
@@ -108,6 +112,12 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
   );
 
   const mock = repository.mock;
+  const modelRepository = useModelRepository();
+  const previewModel = [...(revisionQuery.data?.models ?? [])].sort((a, b) => {
+    const priority = (status: string) => status === "PENDING_REVIEW" ? 3 : status === "APPROVED" ? 2 : 1;
+    return priority(b.reviewStatus) - priority(a.reviewStatus) || b.generatedAt.localeCompare(a.generatedAt);
+  })[0];
+  const previewQuery = useModelDetailQuery(mock === null ? previewModel?.modelId ?? null : null);
 
   // When the Drawing exists but the URL revision is unknown/foreign, fall back
   // to the Drawing's current Revision (real ids are dynamic; deep links must
@@ -186,6 +196,12 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
       return priority(b.reviewStatus) - priority(a.reviewStatus) || b.generatedAt.localeCompare(a.generatedAt);
     })[0];
   const source = revisionDetail.revision.sourceFile;
+  const sourceUrl = repository.sourceFileUrl?.(drawingId, revisionId);
+  const sourceDownloadUrl = repository.sourceFileUrl?.(drawingId, revisionId, true);
+  const previewArtifact = previewQuery.data?.artifacts.find((artifact) => artifact.kind === "PREVIEW");
+  const previewUrl = model && previewArtifact ? modelRepository.artifactUrl?.(model.modelId, previewArtifact.artifactId) : undefined;
+  const modelRun = model === undefined ? undefined : revisionDetail.runs.find((run) => run.runId === model.runId);
+  const modelRunLabel = modelRun === undefined ? "建模任务" : `Run ${modelRun.runLabel}`;
   const latestRun = model === undefined
     ? revisionDetail.runs[revisionDetail.runs.length - 1]
     : revisionDetail.runs.find((run) => run.runId === model.runId) ?? revisionDetail.runs[revisionDetail.runs.length - 1];
@@ -200,6 +216,7 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
    * runtime goes through the async RunRepository with loading/error/retry.
    */
   async function dispatchModeling(): Promise<void> {
+    if (dispatchingRef.current) return; // duplicate submit guard (survives re-renders)
     if (mock !== null) {
       const revision = mock.getRevision(activeRevisionId);
       if (revision === undefined) return;
@@ -210,7 +227,7 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
       setDispatchedRun({ number: run.number, id: run.id });
       return;
     }
-    setConfirming(false);
+    dispatchingRef.current = true;
     setCreatingRun(true);
     setActionError(null);
     setCreateError(null);
@@ -221,10 +238,13 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
         revisionId: activeRevisionId
       });
       invalidateRuns();
+      setConfirming(false);
       setDispatchedRun({ number: run.number, id: run.id });
     } catch (caught) {
-      setCreateError(toRunRepositoryError(caught).message);
+      // Keep the dialog open so the user can read the error and retry.
+      setCreateError(describeError(caught).message);
     } finally {
+      dispatchingRef.current = false;
       setCreatingRun(false);
     }
   }
@@ -236,7 +256,7 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
   }
 
   async function handleSetCurrent(targetRevisionId: string): Promise<void> {
-    setSettingCurrent(true);
+    setSettingCurrent(targetRevisionId);
     setActionError(null);
     setNotice(null);
     try {
@@ -248,9 +268,9 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
         text: `版本 ${revisionLabelById(targetRevisionId)} 现在是当前版本。`
       });
     } catch (caught) {
-      setActionError(toDrawingRepositoryError(caught).message);
+      setActionError(describeError(caught).message);
     } finally {
-      setSettingCurrent(false);
+      setSettingCurrent(null);
     }
   }
 
@@ -288,25 +308,36 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
         activeRevisionId={activeRevisionId}
         activeTab="overview"
         revisionLabelById={revisionLabelById}
+        headerActions={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setAddRevisionOpen(true)}><PlusIcon aria-hidden="true" />新增版本</Button>
+            {!revisionDetail.revision.isCurrent && (
+              <Button variant="secondary" size="sm" disabled={settingCurrent !== null} onClick={() => void handleSetCurrent(activeRevisionId)}>
+                {settingCurrent === activeRevisionId ? "正在设置…" : "设为当前版本"}
+              </Button>
+            )}
+            <Button variant="primary" size="sm" onClick={() => { setCreateError(null); setConfirming(true); }} disabled={creatingRun}><PlayIcon aria-hidden="true" />开始自动建模</Button>
+          </>
+        }
       >
+    {dispatchedRun !== null && (
+      <InlineNotice tone="success" title="任务已加入等待队列" className="mb-4" role="status">
+        Run {dispatchedRun.number} 已创建，等待执行。
+        <div className="mt-4">
+          <Link to={`/runs/${dispatchedRun.id}`} className="btn btn-secondary btn-sm">
+            查看任务
+          </Link>
+        </div>
+      </InlineNotice>
+    )}
         {notice !== null && (
           <InlineNotice tone={notice.tone} title={notice.title} className="mb-4">
             {notice.text}
           </InlineNotice>
         )}
         {actionError !== null && (
-          <InlineNotice tone="error" title="操作未完成" className="mb-4">
+          <InlineNotice tone="error" title="操作未完成" className="mb-4" role="alert">
             {actionError}
-          </InlineNotice>
-        )}
-        {createError !== null && (
-          <InlineNotice tone="error" title="创建建模任务失败" className="mb-4">
-            {createError}
-            <div className="mt-4">
-              <Button variant="secondary" size="sm" onClick={() => void dispatchModeling()}>
-                重试
-              </Button>
-            </div>
           </InlineNotice>
         )}
 
@@ -314,9 +345,16 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
           <Card>
             <CardHeader><CardTitle>原始图纸</CardTitle></CardHeader>
             <CardBody>
-              <div className="drawing-preview" role="img" aria-label="工程图纸预览"><div className="drawing-preview-inner" /></div>
+              {mock !== null ? <div className="drawing-preview" role="img" aria-label="工程图纸预览"><div className="drawing-preview-inner" /></div> : sourceUrl && source.format.toUpperCase() === "PDF" ? (
+                <object data={sourceUrl} type="application/pdf" aria-label="工程图纸预览" style={{ width: "100%", height: 260 }}>
+                  <a href={sourceUrl} target="_blank" rel="noreferrer">查看原始 PDF 图纸</a>
+                </object>
+              ) : <p className="text-sm text-muted">{source.format.toUpperCase()} 图纸请下载后使用本机软件查看。</p>}
               <PropertyList className="mt-4" items={[{ key: "文件名", value: source.fileName, mono: true }, { key: "文件大小", value: formatBytes(source.sizeBytes) }, { key: "上传时间", value: formatRelativeTime(source.uploadedAt, now) }]} />
-              <Button variant="secondary" size="sm" className="overview-download" disabled buttonProps={{ title: "原图下载将在后续阶段提供（当前不开放文件访问）" }}><DownloadIcon aria-hidden="true" />下载原图</Button>
+              {sourceDownloadUrl ? <div className="overview-download flex-row-gap-3">
+                <a className="btn btn-secondary btn-sm" href={sourceDownloadUrl} download={source.fileName}><DownloadIcon aria-hidden="true" />下载原图</a>
+                {source.format.toUpperCase() === "PDF" && <a className="btn btn-ghost btn-sm" href={sourceUrl} target="_blank" rel="noreferrer">查看原图</a>}
+              </div> : <Button variant="secondary" size="sm" className="overview-download" disabled><DownloadIcon aria-hidden="true" />下载原图</Button>}
             </CardBody>
           </Card>
 
@@ -324,9 +362,9 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
             <CardHeader><CardTitle>当前模型</CardTitle>{model === undefined ? <StatusBadge variant="no-model">尚未建模</StatusBadge> : <StatusBadge variant={modelStatusBadge(model.reviewStatus)}>{modelStatusLabel(model.reviewStatus)}</StatusBadge>}</CardHeader>
             <CardBody>
               {model === undefined ? <div className="overview-model-empty"><ModelPreview modelLabel="MODEL" size={110} showLabel /><p className="text-sm text-muted">当前版本还没有生成模型。</p></div> : <>
-                <div className="model-preview aspect-16-10"><ModelPreview modelLabel={model.modelLabel} size={110} showLabel /><div className="model-preview-placeholder-label">{model.modelLabel}</div></div>
-                {model.reviewStatus === "PENDING_REVIEW" && <InlineNotice tone="warning" title="等待人工审核" className="mt-4">模型 {model.modelLabel} 由 {model.runId.replace(/^run-.*-/, "Run ")} 自动生成，请在 SolidWorks 中检查后确认。</InlineNotice>}
-                <div className="overview-model-actions"><Button variant="secondary" size="sm" disabled buttonProps={{ title: "SolidWorks 集成将在后续阶段提供" }}><PlayIcon aria-hidden="true" />在 SolidWorks 中打开</Button><Button variant="ghost" size="sm" href={`/drawings/${activeDrawingId}/revisions/${activeRevisionId}/models/${model.modelId}`}>查看详情</Button></div>
+                <div className="model-preview aspect-16-10"><ModelPreview modelLabel={model.modelLabel} size={110} showLabel placeholder={mock !== null} {...(previewUrl ? { imageUrl: previewUrl } : {})} /><div className="model-preview-placeholder-label">{model.modelLabel}</div></div>
+                {model.reviewStatus === "PENDING_REVIEW" && <InlineNotice tone="warning" title="等待人工审核" className="mt-4">模型 {model.modelLabel} 由 {modelRunLabel} 自动生成，请在 SolidWorks 中检查后确认。</InlineNotice>}
+                <div className="overview-model-actions">{mock !== null && <Button variant="secondary" size="sm" disabled buttonProps={{ title: "SolidWorks 集成将在后续阶段提供" }}><PlayIcon aria-hidden="true" />在 SolidWorks 中打开</Button>}<Link to={`/drawings/${activeDrawingId}/revisions/${activeRevisionId}/models/${model.modelId}`} className="btn btn-ghost btn-sm">查看详情</Link></div>
               </>}
             </CardBody>
           </Card>
@@ -337,8 +375,8 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
           <CardBody padding="flush">
             <div className="overview-status-grid">
               <div><span className="property-key">最近 Run</span><strong className="text-mono">{latestRun?.runLabel ?? "—"}</strong><span className="text-xs text-muted">{latestRun === undefined ? "暂无记录" : formatRelativeTime(latestRun.createdAt, now)}</span></div>
-              <div><span className="property-key">Run 状态</span>{latestRun === undefined ? <StatusBadge variant="no-model">暂无</StatusBadge> : <StatusBadge variant={latestRun.status === "COMPLETED" ? "completed" : latestRun.status === "RUNNING" ? "running" : "no-model"}>{runStatusLabel(latestRun.status)}</StatusBadge>}</div>
-              <div><span className="property-key">最新模型</span><strong className="text-mono">{model?.modelLabel ?? "—"}</strong><span className="text-xs text-muted">{model === undefined ? "尚未生成" : `由 ${model.runId.replace(/^run-.*-/, "Run ")} 生成`}</span></div>
+              <div><span className="property-key">Run 状态</span>{latestRun === undefined ? <StatusBadge variant="no-model">暂无</StatusBadge> : <RunStatusBadge status={latestRun.status} />}</div>
+              <div><span className="property-key">最新模型</span><strong className="text-mono">{model?.modelLabel ?? "—"}</strong><span className="text-xs text-muted">{model === undefined ? "尚未生成" : `由 ${modelRunLabel} 生成`}</span></div>
               <div><span className="property-key">审核状态</span>{model === undefined ? <StatusBadge variant="no-model">尚未建模</StatusBadge> : <StatusBadge variant={modelStatusBadge(model.reviewStatus)}>{modelStatusLabel(model.reviewStatus)}</StatusBadge>}</div>
               <div><span className="property-key">成本测算</span><StatusBadge variant={revisionDetail.revision.currentApprovedModelId === null ? "no-model" : "approved"}>{revisionDetail.revision.currentApprovedModelId === null ? "不可用" : "可用"}</StatusBadge><span className="text-xs text-muted">{revisionDetail.revision.currentApprovedModelId === null ? "需审核通过后可用" : "基于正式模型"}</span></div>
             </div>
@@ -353,7 +391,7 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
             )}
             {historyQuery.status === "error" && (
               <InlineNotice tone="error" title="版本历史加载失败">
-                {historyQuery.error?.message ?? "未知错误"}
+                {describeError(historyQuery.error).message}
                 <div className="mt-4"><Button variant="secondary" size="sm" onClick={() => historyQuery.retry()}>重试</Button></div>
               </InlineNotice>
             )}
@@ -377,10 +415,10 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
                           variant="ghost"
                           size="sm"
                           className="btn-ghost-muted"
-                          disabled={settingCurrent}
+                          disabled={settingCurrent !== null}
                           onClick={() => void handleSetCurrent(revision.revisionId)}
                         >
-                          {settingCurrent ? "正在设置…" : "设为当前版本"}
+                          {settingCurrent === revision.revisionId ? "正在设置…" : "设为当前版本"}
                         </Button>
                         <Button
                           variant="ghost"
@@ -406,27 +444,23 @@ export function DrawingOverviewPage({ now = DISPLAY_NOW, drawingRepository }: Dr
         </Card>
       </DrawingWorkspace>
 
-      <div className="workspace-header-actions overview-fixed-actions">
-        <Button variant="secondary" size="sm" onClick={() => setAddRevisionOpen(true)}><span aria-hidden="true">＋</span>新增版本</Button>
-        {!revisionDetail.revision.isCurrent && (
-          <Button variant="secondary" size="sm" disabled={settingCurrent} onClick={() => void handleSetCurrent(activeRevisionId)}>
-            {settingCurrent ? "正在设置…" : "设为当前版本"}
-          </Button>
-        )}
-        <Button variant="primary" size="sm" onClick={() => setConfirming(true)}><PlayIcon aria-hidden="true" />开始自动建模</Button>
-      </div>
-
-      {dispatchedRun !== null && (
-        <InlineNotice tone="success" title="任务已加入等待队列" className="overview-dispatch-notice">
-          Run {dispatchedRun.number} 已创建，等待执行。
-          <div className="mt-4">
-            <Link to={`/runs/${dispatchedRun.id}`} className="btn btn-secondary btn-sm">
-              查看任务
-            </Link>
+      {confirming && (
+        <Dialog labelledBy="modeling-dialog-title" onClose={() => setConfirming(false)} dismissible={!creatingRun}>
+          <div className="dialog-header"><h2 id="modeling-dialog-title" className="dialog-title">确认开始自动建模</h2></div>
+          <div className="dialog-body">
+            <p className="dialog-text">
+              将为图纸 <strong className="text-mono">{drawingDetail.drawing.drawingNumber}</strong> 的当前所选版本 {revisionDetail.revision.revisionLabel} 创建新的建模任务，使用该版本图纸和最新版本记忆（工程事实与历史反馈）。任务会先进入等待队列。
+            </p>
+            {createError !== null && (
+              <InlineNotice tone="error" title="创建建模任务失败" className="mt-4" role="alert">{createError}</InlineNotice>
+            )}
           </div>
-        </InlineNotice>
+          <div className="dialog-footer">
+            <Button variant="ghost" onClick={() => setConfirming(false)} disabled={creatingRun}><CloseIcon aria-hidden="true" />取消</Button>
+            <Button variant="primary" onClick={() => void dispatchModeling()} disabled={creatingRun}>{creatingRun ? "正在创建…" : (<><PlayIcon aria-hidden="true" />确认并开始</>)}</Button>
+          </div>
+        </Dialog>
       )}
-      {confirming && <div className="dialog-overlay" role="presentation"><section className="dialog" role="dialog" aria-modal="true" aria-labelledby="modeling-dialog-title"><div className="dialog-header"><div id="modeling-dialog-title" className="dialog-title">确认开始自动建模</div></div><div className="dialog-body"><p className="dialog-text">将基于当前版本 {revisionDetail.revision.revisionLabel} 的工程事实和历史反馈创建新的建模任务。任务会先进入等待队列。</p></div><div className="dialog-footer"><Button variant="ghost" onClick={() => setConfirming(false)} disabled={creatingRun}><CloseIcon aria-hidden="true" />取消</Button><Button variant="primary" onClick={() => void dispatchModeling()} disabled={creatingRun}>{creatingRun ? "正在创建…" : (<><PlayIcon aria-hidden="true" />确认并开始</>)}</Button></div></section></div>}
       {addRevisionOpen && (
         <AddRevisionDialog
           repository={repository}

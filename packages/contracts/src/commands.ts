@@ -24,11 +24,13 @@ export const COMMAND_NAMES = [
   "drawing.addRevisionFact",
   "drawing.addModelingFeedback",
   "drawing.deleteRevision",
+  "drawing.delete",
   "run.create",
   "run.cancel",
   "run.delete",
   "clarification.submit",
   "model.review",
+  "model.delete",
   "model.openInSolidWorks",
   "costData.update",
   "costReport.create",
@@ -94,7 +96,8 @@ export interface AddRevisionFactCommand {
   source: RevisionFact["source"];
   /** Run that produced the fact, when applicable. */
   sourceRunId?: string;
-  createdAt: string;
+  /** Ignored by the Runner: the server clock stamps the Fact (BE-03). */
+  createdAt?: string;
   createdBy?: string;
 }
 
@@ -103,7 +106,8 @@ export interface AddModelingFeedbackCommand {
   drawingId: string;
   revisionId: string;
   content: string;
-  createdAt: string;
+  /** Ignored by the Runner: the server clock stamps the Feedback (BE-03). */
+  createdAt?: string;
 }
 
 export interface DeleteRevisionCommand {
@@ -146,7 +150,9 @@ export interface SubmitClarificationCommand {
   command: "clarification.submit";
   clarificationRequestId: string;
   answers: readonly ClarificationAnswer[];
-  answeredAt: string;
+  /** Ignored by the Runner: the server clock stamps the answers (FE-05). */
+  answeredAt?: string;
+  /** Not an authenticated identity until an auth system exists. */
   answeredBy: string;
 }
 
@@ -156,8 +162,10 @@ export interface ReviewModelCommand {
   result: ModelReviewResult;
   /** Required when `result` is REJECTED. */
   comment?: string;
+  /** Not an authenticated identity until an auth system exists. */
   reviewerId: string;
-  reviewedAt: string;
+  /** Ignored by the Runner: the server clock stamps the review (FE-05). */
+  reviewedAt?: string;
 }
 
 export interface OpenModelInSolidWorksCommand {
@@ -241,6 +249,8 @@ export interface SecretApiKeyStatus {
 export type RecoveryStatusResult = RecoveryStatusSummary | null;
 
 export type Command =
+  | { command: "drawing.delete"; drawingId: string; confirmationToken: string }
+  | { command: "model.delete"; modelId: string; confirmationToken: string }
   | CreateDrawingCommand
   | CreateRevisionCommand
   | SetCurrentRevisionCommand

@@ -1,6 +1,9 @@
 import {
   COST_BASES,
   COST_CURRENCIES,
+  COST_DENSITY_UNITS,
+  COST_PRICE_UNITS,
+  MAX_COST_QUANTITY,
   MODEL_REVIEW_RESULTS,
   RUN_EVENT_CONTRACT_VERSION,
   RUN_EVENT_TYPES,
@@ -52,8 +55,62 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0;
+/** Default upper bound of any free-text field (BE-10). */
+const MAX_TEXT_LENGTH = 4000;
+/** Tighter bounds of well-known fields. */
+const MAX_DRAWING_NUMBER_LENGTH = 64;
+const MAX_NAME_LENGTH = 200;
+const MAX_FIELD_LENGTH = 100;
+const MAX_COMMENT_LENGTH = 2000;
+/** Collection size limits. */
+const MAX_ANSWERS = 100;
+const MAX_COST_ITEMS = 500;
+const MAX_ALLOWANCE_VALUES = 50;
+/** Numeric sanity limits (generous, but finite: 1e308 must never reach the DB). */
+const MAX_COST_AMOUNT = 1e9;
+const MAX_DENSITY_G_CM3 = 100;
+const MAX_ALLOWANCE_MM = 100_000;
+const MAX_DIMENSION_VALUE = 1e9;
+const MAX_FINISHED_VOLUME_M3 = 1000;
+
+function isNonEmptyString(value: unknown, maxLength: number = MAX_TEXT_LENGTH): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= maxLength;
+}
+
+/** Throws INVALID_PAYLOAD when a collection is larger than its limit. */
+function assertMaxItems(items: readonly unknown[], max: number, label: string): void {
+  if (items.length > max) {
+    throw new IpcValidationError("INVALID_PAYLOAD", `${label} must not contain more than ${max} items`);
+  }
+}
+
+/** Throws INVALID_PAYLOAD when two entries share the same trimmed value. */
+function assertUniqueBy(
+  items: readonly unknown[],
+  read: (item: Record<string, unknown>) => unknown,
+  label: string
+): void {
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (!isRecord(item)) continue;
+    const value = read(item);
+    if (typeof value !== "string") continue;
+    const normalized = value.trim();
+    if (seen.has(normalized)) {
+      throw new IpcValidationError("INVALID_PAYLOAD", `${label} must be unique, duplicate: ${normalized}`);
+    }
+    seen.add(normalized);
+  }
+}
+
+/** A finite number within `[min, max]` (exclusive min when `minExclusive`). */
+function isBoundedNumber(value: unknown, min: number, max: number, minExclusive = false): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    (minExclusive ? value > min : value >= min) &&
+    value <= max
+  );
 }
 
 const QUERY_NAME_SET: ReadonlySet<string> = new Set(QUERY_NAMES);
@@ -78,10 +135,12 @@ const COST_BASIS_SET: ReadonlySet<string> = new Set(COST_BASES);
 const QUERY_STRING_ID_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "drawing.getDetail": ["drawingId"],
   "drawing.getHistory": ["drawingId"],
+  "drawing.getDeletionImpact": ["drawingId"],
   "revision.getDetail": ["drawingId", "revisionId"],
   "revision.getHistory": ["drawingId", "revisionId"],
   "run.getDetail": ["runId"],
   "model.getDetail": ["modelId"],
+  "model.getDeletionImpact": ["modelId"],
   "clarification.get": ["clarificationRequestId"],
   "costReport.getDetail": ["costReportId"],
   "costReport.listByRevision": ["drawingId", "revisionId"]
@@ -149,10 +208,8 @@ function assertClarificationAnswer(answer: unknown): void {
   if (!isNonEmptyString(answer.questionId)) {
     throw new IpcValidationError("INVALID_PAYLOAD", "answer.questionId must be a non-empty string");
   }
-  if (!isNonEmptyString(answer.answeredAt)) {
-    throw new IpcValidationError("INVALID_PAYLOAD", "answer.answeredAt must be a non-empty string");
-  }
-  if (!isNonEmptyString(answer.answeredBy)) {
+  assertOptionalCanonicalIsoTimestamp(answer.answeredAt, "answer.answeredAt");
+  if (!isNonEmptyString(answer.answeredBy, MAX_NAME_LENGTH)) {
     throw new IpcValidationError("INVALID_PAYLOAD", "answer.answeredBy must be a non-empty string");
   }
   const value = answer.value;
@@ -169,10 +226,10 @@ function assertClarificationAnswer(answer: unknown): void {
   switch (kind) {
     case "dimension":
       assertNoUnknownKeys(value, ["kind", "value", "unit"], "dimension answer value");
-      if (typeof value.value !== "number" || !Number.isFinite(value.value)) {
+      if (!isBoundedNumber(value.value, -MAX_DIMENSION_VALUE, MAX_DIMENSION_VALUE)) {
         throw new IpcValidationError(
           "INVALID_PAYLOAD",
-          "dimension answer value.value must be a finite number"
+          "dimension answer value.value must be a finite number of sane magnitude"
         );
       }
       if (!isNonEmptyString(value.unit)) {
@@ -208,7 +265,7 @@ function assertSourceFile(file: unknown): void {
     throw new IpcValidationError("INVALID_PAYLOAD", "sourceFile must be an object");
   }
   assertNoUnknownKeys(file, ["fileName", "format", "sizeBytes", "sha256"], "sourceFile");
-  if (!isNonEmptyString(file.fileName)) {
+  if (!isNonEmptyString(file.fileName, 255)) {
     throw new IpcValidationError("INVALID_PAYLOAD", "sourceFile.fileName must be a non-empty string");
   }
   if (typeof file.format !== "string" || !DRAWING_FILE_FORMATS.has(file.format)) {
@@ -237,16 +294,35 @@ function assertCanonicalIsoTimestamp(value: unknown, label: string): void {
   }
 }
 
+/**
+ * Server-stamped fields (`createdAt` of facts/feedback, `reviewedAt`,
+ * `answeredAt`): the server clock is authoritative and a client value is
+ * ignored, so the field is optional; when present it must still be canonical.
+ */
+function assertOptionalCanonicalIsoTimestamp(value: unknown, label: string): void {
+  if (value !== undefined) assertCanonicalIsoTimestamp(value, label);
+}
+
+/**
+ * Lenient timestamp check for persisted maintenance dates that may predate the
+ * canonical-only rule: must be a parseable date string of sane length.
+ */
+function assertParseableTimestamp(value: unknown, label: string): void {
+  if (typeof value !== "string" || value.length === 0 || value.length > 40 || Number.isNaN(Date.parse(value))) {
+    throw new IpcValidationError("INVALID_PAYLOAD", `${label} must be a valid timestamp`);
+  }
+}
+
 /** Strictly validates ONE machining allowance dimension (`AllowanceValue`). */
 function assertAllowanceValue(value: unknown, label: string): void {
   if (!isRecord(value)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label} must be an object`);
   }
   assertNoUnknownKeys(value, ["name", "valueMm"], label);
-  if (!isNonEmptyString(value.name)) {
+  if (!isNonEmptyString(value.name, MAX_NAME_LENGTH)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.name must be a non-empty string`);
   }
-  if (typeof value.valueMm !== "number" || !Number.isFinite(value.valueMm) || value.valueMm < 0) {
+  if (!isBoundedNumber(value.valueMm, 0, MAX_ALLOWANCE_MM)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.valueMm must be a non-negative number`);
   }
 }
@@ -264,38 +340,36 @@ function assertMaterialCostValue(value: unknown, label: string): void {
   if (!isNonEmptyString(value.id)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.id must be a non-empty string`);
   }
-  if (!isNonEmptyString(value.name)) {
+  if (!isNonEmptyString(value.name, MAX_NAME_LENGTH)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.name must be a non-empty string`);
   }
-  if (
-    typeof value.purchasePrice !== "number" ||
-    !Number.isFinite(value.purchasePrice) ||
-    value.purchasePrice <= 0
-  ) {
-    throw new IpcValidationError("INVALID_PAYLOAD", `${label}.purchasePrice must be a positive number`);
-  }
-  if (!isNonEmptyString(value.priceUnit)) {
-    throw new IpcValidationError("INVALID_PAYLOAD", `${label}.priceUnit must be a non-empty string`);
-  }
-  // density is optional, but when present it must be positive.
-  if (
-    value.density !== undefined &&
-    (typeof value.density !== "number" || !Number.isFinite(value.density) || value.density <= 0)
-  ) {
-    throw new IpcValidationError("INVALID_PAYLOAD", `${label}.density must be a positive number when present`);
-  }
-  if (value.densityUnit !== undefined && !isNonEmptyString(value.densityUnit)) {
+  if (!isBoundedNumber(value.purchasePrice, 0, MAX_COST_AMOUNT, true)) {
     throw new IpcValidationError(
       "INVALID_PAYLOAD",
-      `${label}.densityUnit must be a non-empty string when present`
+      `${label}.purchasePrice must be a positive number not greater than ${MAX_COST_AMOUNT}`
     );
   }
-  if (!isNonEmptyString(value.effectiveFrom)) {
-    throw new IpcValidationError("INVALID_PAYLOAD", `${label}.effectiveFrom must be a non-empty string`);
+  if (typeof value.priceUnit !== "string" || !(COST_PRICE_UNITS as readonly string[]).includes(value.priceUnit)) {
+    throw new IpcValidationError(
+      "INVALID_PAYLOAD",
+      `${label}.priceUnit must be one of ${COST_PRICE_UNITS.join(", ")}`
+    );
   }
-  if (!isNonEmptyString(value.updatedAt)) {
-    throw new IpcValidationError("INVALID_PAYLOAD", `${label}.updatedAt must be a non-empty string`);
+  // density is optional, but when present it must be positive.
+  if (value.density !== undefined && !isBoundedNumber(value.density, 0, MAX_DENSITY_G_CM3, true)) {
+    throw new IpcValidationError("INVALID_PAYLOAD", `${label}.density must be a positive number when present`);
   }
+  if (
+    value.densityUnit !== undefined &&
+    (typeof value.densityUnit !== "string" || !(COST_DENSITY_UNITS as readonly string[]).includes(value.densityUnit))
+  ) {
+    throw new IpcValidationError(
+      "INVALID_PAYLOAD",
+      `${label}.densityUnit must be one of ${COST_DENSITY_UNITS.join(", ")} when present`
+    );
+  }
+  assertParseableTimestamp(value.effectiveFrom, `${label}.effectiveFrom`);
+  assertParseableTimestamp(value.updatedAt, `${label}.updatedAt`);
 }
 
 /** Strictly validates ONE allowance definition (per-stock-type allowances). */
@@ -313,12 +387,11 @@ function assertAllowanceDefinition(value: unknown, label: string): void {
       `${label}.stockType must be one of CYLINDER, RECTANGULAR_BAR`
     );
   }
-  if (!isNonEmptyString(value.updatedAt)) {
-    throw new IpcValidationError("INVALID_PAYLOAD", `${label}.updatedAt must be a non-empty string`);
-  }
+  assertParseableTimestamp(value.updatedAt, `${label}.updatedAt`);
   if (!Array.isArray(value.allowances)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.allowances must be an array`);
   }
+  assertMaxItems(value.allowances, MAX_ALLOWANCE_VALUES, `${label}.allowances`);
   for (const allowance of value.allowances) {
     assertAllowanceValue(allowance, `${label}.allowances[]`);
   }
@@ -337,11 +410,14 @@ function assertFixedCostValue(value: unknown, label: string): void {
   if (!isNonEmptyString(value.id)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.id must be a non-empty string`);
   }
-  if (!isNonEmptyString(value.name)) {
+  if (!isNonEmptyString(value.name, MAX_NAME_LENGTH)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.name must be a non-empty string`);
   }
-  if (typeof value.amount !== "number" || !Number.isFinite(value.amount) || value.amount < 0) {
-    throw new IpcValidationError("INVALID_PAYLOAD", `${label}.amount must be a non-negative number`);
+  if (!isBoundedNumber(value.amount, 0, MAX_COST_AMOUNT)) {
+    throw new IpcValidationError(
+      "INVALID_PAYLOAD",
+      `${label}.amount must be a non-negative number not greater than ${MAX_COST_AMOUNT}`
+    );
   }
   if (typeof value.currency !== "string" || !COST_CURRENCY_SET.has(value.currency)) {
     throw new IpcValidationError(
@@ -358,9 +434,7 @@ function assertFixedCostValue(value: unknown, label: string): void {
   if (typeof value.defaultEnabled !== "boolean") {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.defaultEnabled must be a boolean`);
   }
-  if (!isNonEmptyString(value.updatedAt)) {
-    throw new IpcValidationError("INVALID_PAYLOAD", `${label}.updatedAt must be a non-empty string`);
-  }
+  assertParseableTimestamp(value.updatedAt, `${label}.updatedAt`);
 }
 
 /** Strictly validates ONE display-only custom cost field. */
@@ -372,10 +446,10 @@ function assertCustomCostField(value: unknown, label: string): void {
   if (!isNonEmptyString(value.id)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.id must be a non-empty string`);
   }
-  if (!isNonEmptyString(value.key)) {
+  if (!isNonEmptyString(value.key, MAX_FIELD_LENGTH)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.key must be a non-empty string`);
   }
-  if (!isNonEmptyString(value.name)) {
+  if (!isNonEmptyString(value.name, MAX_NAME_LENGTH)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.name must be a non-empty string`);
   }
   if (!isNonEmptyString(value.value)) {
@@ -388,9 +462,7 @@ function assertCustomCostField(value: unknown, label: string): void {
   if (value.semantics !== "DISPLAY_ONLY") {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.semantics must be DISPLAY_ONLY`);
   }
-  if (!isNonEmptyString(value.updatedAt)) {
-    throw new IpcValidationError("INVALID_PAYLOAD", `${label}.updatedAt must be a non-empty string`);
-  }
+  assertParseableTimestamp(value.updatedAt, `${label}.updatedAt`);
 }
 
 /**
@@ -424,24 +496,36 @@ function assertCostDataSnapshot(
   if (!Array.isArray(value.materials)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.materials must be an array`);
   }
+  assertMaxItems(value.materials, MAX_COST_ITEMS, `${label}.materials`);
+  assertUniqueBy(value.materials, (item) => item.id, `${label}.materials[].id`);
+  assertUniqueBy(value.materials, (item) => item.name, `${label}.materials[].name`);
   for (const material of value.materials) {
     assertMaterialCostValue(material, `${label}.materials[]`);
   }
   if (!Array.isArray(value.allowances)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.allowances must be an array`);
   }
+  assertMaxItems(value.allowances, MAX_COST_ITEMS, `${label}.allowances`);
+  assertUniqueBy(value.allowances, (item) => item.id, `${label}.allowances[].id`);
   for (const allowance of value.allowances) {
     assertAllowanceDefinition(allowance, `${label}.allowances[]`);
   }
   if (!Array.isArray(value.fixedCosts)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.fixedCosts must be an array`);
   }
+  assertMaxItems(value.fixedCosts, MAX_COST_ITEMS, `${label}.fixedCosts`);
+  assertUniqueBy(value.fixedCosts, (item) => item.id, `${label}.fixedCosts[].id`);
+  assertUniqueBy(value.fixedCosts, (item) => item.name, `${label}.fixedCosts[].name`);
   for (const fixedCost of value.fixedCosts) {
     assertFixedCostValue(fixedCost, `${label}.fixedCosts[]`);
   }
   if (!Array.isArray(value.customFields)) {
     throw new IpcValidationError("INVALID_PAYLOAD", `${label}.customFields must be an array`);
   }
+  assertMaxItems(value.customFields, MAX_COST_ITEMS, `${label}.customFields`);
+  assertUniqueBy(value.customFields, (item) => item.id, `${label}.customFields[].id`);
+  assertUniqueBy(value.customFields, (item) => item.key, `${label}.customFields[].key`);
+  assertUniqueBy(value.customFields, (item) => item.name, `${label}.customFields[].name`);
   for (const customField of value.customFields) {
     assertCustomCostField(customField, `${label}.customFields[]`);
   }
@@ -469,16 +553,14 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
         ["command", "drawingNumber", "name", "sourceFile", "createdAt", "createdBy"],
         "drawing.create payload"
       );
-      if (!isNonEmptyString(payload.drawingNumber)) {
+      if (!isNonEmptyString(payload.drawingNumber, MAX_DRAWING_NUMBER_LENGTH)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "drawingNumber must be a non-empty string");
       }
-      if (!isNonEmptyString(payload.name)) {
+      if (!isNonEmptyString(payload.name, MAX_NAME_LENGTH)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "name must be a non-empty string");
       }
-      if (!isNonEmptyString(payload.createdAt)) {
-        throw new IpcValidationError("INVALID_PAYLOAD", "createdAt must be a non-empty string");
-      }
-      if (payload.createdBy !== undefined && !isNonEmptyString(payload.createdBy)) {
+      assertCanonicalIsoTimestamp(payload.createdAt, "createdAt");
+      if (payload.createdBy !== undefined && !isNonEmptyString(payload.createdBy, MAX_NAME_LENGTH)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "createdBy must be a non-empty string");
       }
       assertSourceFile(payload.sourceFile);
@@ -492,9 +574,7 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
       if (!isNonEmptyString(payload.drawingId)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "drawingId must be a non-empty string");
       }
-      if (!isNonEmptyString(payload.createdAt)) {
-        throw new IpcValidationError("INVALID_PAYLOAD", "createdAt must be a non-empty string");
-      }
+      assertCanonicalIsoTimestamp(payload.createdAt, "createdAt");
       assertSourceFile(payload.sourceFile);
       return;
     case "drawing.setCurrentRevision":
@@ -509,9 +589,7 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
       if (!isNonEmptyString(payload.revisionId)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "revisionId must be a non-empty string");
       }
-      if (!isNonEmptyString(payload.updatedAt)) {
-        throw new IpcValidationError("INVALID_PAYLOAD", "updatedAt must be a non-empty string");
-      }
+      assertCanonicalIsoTimestamp(payload.updatedAt, "updatedAt");
       return;
     case "drawing.deleteRevision":
       assertNoUnknownKeys(
@@ -525,10 +603,17 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
       if (!isNonEmptyString(payload.revisionId)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "revisionId must be a non-empty string");
       }
-      if (!isNonEmptyString(payload.updatedAt)) {
-        throw new IpcValidationError("INVALID_PAYLOAD", "updatedAt must be a non-empty string");
+      assertCanonicalIsoTimestamp(payload.updatedAt, "updatedAt");
+      return;
+    case "drawing.delete":
+    case "model.delete": {
+      const idField = operation === "drawing.delete" ? "drawingId" : "modelId";
+      assertNoUnknownKeys(payload, ["command", idField, "confirmationToken"], "deletion payload");
+      if (!isNonEmptyString(payload[idField]) || typeof payload.confirmationToken !== "string" || !/^[a-f0-9]{64}$/.test(payload.confirmationToken)) {
+        throw new IpcValidationError("INVALID_PAYLOAD", "Deletion requires an object id and current confirmation token");
       }
       return;
+    }
     case "drawing.addRevisionFact":
       assertNoUnknownKeys(
         payload,
@@ -541,7 +626,7 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
       if (!isNonEmptyString(payload.revisionId)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "revisionId must be a non-empty string");
       }
-      if (!isNonEmptyString(payload.field)) {
+      if (!isNonEmptyString(payload.field, MAX_FIELD_LENGTH)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "field must be a non-empty string");
       }
       if (!isNonEmptyString(payload.value)) {
@@ -550,15 +635,13 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
       if (typeof payload.source !== "string" || !REVISION_FACT_SOURCES.has(payload.source)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "source must be a revision-fact source");
       }
-      if (payload.unit !== undefined && !isNonEmptyString(payload.unit)) {
+      if (payload.unit !== undefined && !isNonEmptyString(payload.unit, MAX_FIELD_LENGTH)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "unit must be a non-empty string");
       }
       if (payload.sourceRunId !== undefined && !isNonEmptyString(payload.sourceRunId)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "sourceRunId must be a non-empty string");
       }
-      if (!isNonEmptyString(payload.createdAt)) {
-        throw new IpcValidationError("INVALID_PAYLOAD", "createdAt must be a non-empty string");
-      }
+      assertOptionalCanonicalIsoTimestamp(payload.createdAt, "createdAt");
       return;
     case "drawing.addModelingFeedback":
       assertNoUnknownKeys(
@@ -572,12 +655,10 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
       if (!isNonEmptyString(payload.revisionId)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "revisionId must be a non-empty string");
       }
-      if (!isNonEmptyString(payload.content)) {
+      if (!isNonEmptyString(payload.content, MAX_TEXT_LENGTH)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "content must be a non-empty string");
       }
-      if (!isNonEmptyString(payload.createdAt)) {
-        throw new IpcValidationError("INVALID_PAYLOAD", "createdAt must be a non-empty string");
-      }
+      assertOptionalCanonicalIsoTimestamp(payload.createdAt, "createdAt");
       return;
     case "storage.updateSettings": {
       assertNoUnknownKeys(payload, ["command", "settings"], "storage.updateSettings payload");
@@ -629,7 +710,7 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
       if (!isNonEmptyString(payload.runId)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "run.cancel runId must be a non-empty string");
       }
-      if (payload.reason !== undefined && !isNonEmptyString(payload.reason)) {
+      if (payload.reason !== undefined && !isNonEmptyString(payload.reason, MAX_COMMENT_LENGTH)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "run.cancel reason must be a non-empty string");
       }
       return;
@@ -647,13 +728,8 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
           "clarification.submit clarificationRequestId must be a non-empty string"
         );
       }
-      if (!isNonEmptyString(payload.answeredAt)) {
-        throw new IpcValidationError(
-          "INVALID_PAYLOAD",
-          "clarification.submit answeredAt must be a non-empty string"
-        );
-      }
-      if (!isNonEmptyString(payload.answeredBy)) {
+      assertOptionalCanonicalIsoTimestamp(payload.answeredAt, "clarification.submit answeredAt");
+      if (!isNonEmptyString(payload.answeredBy, MAX_NAME_LENGTH)) {
         throw new IpcValidationError(
           "INVALID_PAYLOAD",
           "clarification.submit answeredBy must be a non-empty string"
@@ -666,6 +742,7 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
           "clarification.submit answers must be a non-empty array"
         );
       }
+      assertMaxItems(answers, MAX_ANSWERS, "clarification.submit answers");
       for (const answer of answers) {
         assertClarificationAnswer(answer);
       }
@@ -683,7 +760,7 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
           "model.review modelId must be a non-empty string"
         );
       }
-      if (!isNonEmptyString(payload.reviewerId)) {
+      if (!isNonEmptyString(payload.reviewerId, MAX_NAME_LENGTH)) {
         throw new IpcValidationError(
           "INVALID_PAYLOAD",
           "model.review reviewerId must be a non-empty string"
@@ -698,18 +775,18 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
           "model.review result must be one of APPROVED, REJECTED"
         );
       }
-      assertCanonicalIsoTimestamp(payload.reviewedAt, "model.review reviewedAt");
+      assertOptionalCanonicalIsoTimestamp(payload.reviewedAt, "model.review reviewedAt");
       // A Rejected Review MUST carry a comment (written into the Revision's
       // Modeling Feedback); a comment on an APPROVED review is optional but
       // when present must be a non-empty string.
       if (payload.result === "REJECTED") {
-        if (!isNonEmptyString(payload.comment)) {
+        if (!isNonEmptyString(payload.comment, MAX_COMMENT_LENGTH)) {
           throw new IpcValidationError(
             "INVALID_PAYLOAD",
             "model.review comment must be a non-empty string when the model is REJECTED"
           );
         }
-      } else if (payload.comment !== undefined && !isNonEmptyString(payload.comment)) {
+      } else if (payload.comment !== undefined && !isNonEmptyString(payload.comment, MAX_COMMENT_LENGTH)) {
         throw new IpcValidationError(
           "INVALID_PAYLOAD",
           "model.review comment must be a non-empty string when present"
@@ -739,12 +816,7 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
         ["command", "input", "createdAt"],
         "costReport.create payload"
       );
-      if (!isNonEmptyString(payload.createdAt)) {
-        throw new IpcValidationError(
-          "INVALID_PAYLOAD",
-          "costReport.create createdAt must be a non-empty string"
-        );
-      }
+      assertCanonicalIsoTimestamp(payload.createdAt, "costReport.create createdAt");
       const input = payload.input;
       if (!isRecord(input)) {
         throw new IpcValidationError("INVALID_PAYLOAD", "costReport.create input must be an object");
@@ -788,11 +860,12 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
       if (
         typeof input.quantity !== "number" ||
         !Number.isSafeInteger(input.quantity) ||
-        input.quantity <= 0
+        input.quantity <= 0 ||
+        input.quantity > MAX_COST_QUANTITY
       ) {
         throw new IpcValidationError(
           "INVALID_PAYLOAD",
-          "costReport.create input.quantity must be a positive integer"
+          `costReport.create input.quantity must be a positive integer not greater than ${MAX_COST_QUANTITY}`
         );
       }
       if (!isNonEmptyString(input.materialId)) {
@@ -807,17 +880,13 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
           "costReport.create input.stockType must be one of CYLINDER, RECTANGULAR_BAR"
         );
       }
-      if (!isNonEmptyString(input.stockSpec)) {
+      if (!isNonEmptyString(input.stockSpec, 100)) {
         throw new IpcValidationError(
           "INVALID_PAYLOAD",
           "costReport.create input.stockSpec must be a non-empty string"
         );
       }
-      if (
-        typeof input.finishedVolume !== "number" ||
-        !Number.isFinite(input.finishedVolume) ||
-        input.finishedVolume <= 0
-      ) {
+      if (!isBoundedNumber(input.finishedVolume, 0, MAX_FINISHED_VOLUME_M3, true)) {
         throw new IpcValidationError(
           "INVALID_PAYLOAD",
           "costReport.create input.finishedVolume must be a positive number"
@@ -829,13 +898,14 @@ function assertCommandPayload(operation: string, payload: Record<string, unknown
           "costReport.create input.allowances must be an array"
         );
       }
+      assertMaxItems(input.allowances, MAX_ALLOWANCE_VALUES, "costReport.create input.allowances");
       for (const allowance of input.allowances) {
         assertAllowanceValue(allowance, "costReport.create input.allowances[]");
       }
       // The frozen element of a report input is the domain `CostDataSnapshot`
       // (no snapshot-level `updatedAt`), strictly validated.
       assertCostDataSnapshot(input.costData, "costReport.create input.costData", false);
-      if (!isNonEmptyString(input.formulaVersion)) {
+      if (!isNonEmptyString(input.formulaVersion, MAX_FIELD_LENGTH)) {
         throw new IpcValidationError(
           "INVALID_PAYLOAD",
           "costReport.create input.formulaVersion must be a non-empty string"

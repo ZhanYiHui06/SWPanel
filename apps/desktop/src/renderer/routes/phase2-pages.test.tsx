@@ -358,7 +358,7 @@ describe("WP6 Revision Memory (facts + feedback)", () => {
     await user.type(within(dialog).getByLabelText("值"), "85 mm");
     await user.click(within(dialog).getByRole("button", { name: "保存事实" }));
     // First attempt fails with the simulated runner outage.
-    expect(await within(dialog).findByText(/暂时不可用/)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/未连接到 SWPanel 服务/)).toBeInTheDocument();
     expect(bridge.state().facts).toHaveLength(0);
 
     // Retry the UNCHANGED form: the same opaque intent id is reused so Main
@@ -400,7 +400,7 @@ describe("WP6 Revision Memory (facts + feedback)", () => {
     const dialog = screen.getByRole("dialog", { name: "添加建模反馈" });
     await user.type(within(dialog).getByLabelText("反馈内容"), "注意 R5 圆角方向");
     await user.click(within(dialog).getByRole("button", { name: "保存反馈" }));
-    expect(await within(dialog).findByText(/暂时不可用/)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/未连接到 SWPanel 服务/)).toBeInTheDocument();
     expect(bridge.state().feedback).toHaveLength(0);
 
     bridge.clearFailure("drawings.addModelingFeedback");
@@ -578,7 +578,7 @@ describe("WP6 conservative Revision deletion (deleteRevision)", () => {
     await user.click(screen.getAllByRole("button", { name: "删除版本" })[0] as HTMLElement);
     const dialog = screen.getByRole("dialog", { name: "删除版本" });
     await user.click(within(dialog).getByRole("button", { name: "确认删除版本" }));
-    expect(await within(dialog).findByText(/暂时不可用/)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/未连接到 SWPanel 服务/)).toBeInTheDocument();
     expect(bridge.state().revisions).toHaveLength(2);
 
     bridge.clearFailure("drawings.deleteRevision");

@@ -14,6 +14,11 @@ export interface InlineNoticeProps {
   title?: string;
   children: ReactNode;
   className?: string;
+  /**
+   * Optional live-region role. Omitted by default so static notices are not
+   * announced; pass "alert" for dynamic errors and "status" for dynamic results.
+   */
+  role?: "alert" | "status";
 }
 
 const toneIcon: Record<StatusTone, ReactNode> = {
@@ -29,10 +34,11 @@ export function InlineNotice({
   icon = toneIcon[tone],
   title,
   children,
-  className
+  className,
+  role
 }: InlineNoticeProps) {
   return (
-    <div className={cx("inline-notice", tone !== "neutral" && tone, className)} data-tone={tone}>
+    <div className={cx("inline-notice", tone !== "neutral" && tone, className)} data-tone={tone} role={role}>
       {icon}
       <div className="inline-notice-content">
         {title !== undefined && <div className="inline-notice-title">{title}</div>}

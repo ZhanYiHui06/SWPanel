@@ -56,7 +56,11 @@
  * workspace) throws {@link InvalidArgumentError} at call time.
  */
 import { mkdtemp, rm } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, join, posix, win32 } from "node:path";
+
+function isPlatformOrCrossAbsolute(value: string): boolean {
+  return isAbsolute(value) || win32.isAbsolute(value) || posix.isAbsolute(value);
+}
 import { tmpdir } from "node:os";
 
 import {
@@ -244,12 +248,19 @@ function pathSegmentsOf(value: string, platform: NodeJS.Platform): string[] {
 export function isSkillMdPathOfDirectory(
   reportedPath: string,
   skillDirectory: string,
-  platform: NodeJS.Platform = process.platform
+  platform?: NodeJS.Platform
 ): boolean {
-  const reported = pathSegmentsOf(reportedPath, platform);
-  const directory = pathSegmentsOf(skillDirectory, platform);
+  // If platform is explicitly provided, honor it. Otherwise, if it has a Windows drive or starts with drive, win32.
+  const effectivePlatform =
+    platform !== undefined
+      ? platform
+      : /^[a-zA-Z]:/.test(skillDirectory) || /^[a-zA-Z]:/.test(reportedPath)
+        ? "win32"
+        : process.platform;
+  const reported = pathSegmentsOf(reportedPath, effectivePlatform);
+  const directory = pathSegmentsOf(skillDirectory, effectivePlatform);
   if (reported.length !== directory.length + 1) return false;
-  const equal = platform === "win32" ? insensitiveEqual : exactEqual;
+  const equal = effectivePlatform === "win32" ? insensitiveEqual : exactEqual;
   for (let index = 0; index < directory.length; index += 1) {
     const reportedSegment = reported[index];
     const directorySegment = directory[index];
@@ -295,14 +306,14 @@ export async function probeLiveCodexRuntime(
   if (typeof skillResolvedPath !== "string" || skillResolvedPath.trim().length === 0) {
     throw new InvalidArgumentError("skillResolvedPath must be a non-empty absolute path");
   }
-  if (!isAbsolute(skillResolvedPath)) {
+  if (!isPlatformOrCrossAbsolute(skillResolvedPath)) {
     throw new InvalidArgumentError("skillResolvedPath must be an absolute path");
   }
   if (options.probeWorkspace !== undefined) {
     if (typeof options.probeWorkspace !== "string" || options.probeWorkspace.trim().length === 0) {
       throw new InvalidArgumentError("probeWorkspace must be a non-empty absolute path");
     }
-    if (!isAbsolute(options.probeWorkspace)) {
+    if (!isPlatformOrCrossAbsolute(options.probeWorkspace)) {
       throw new InvalidArgumentError("probeWorkspace must be an absolute path");
     }
   }

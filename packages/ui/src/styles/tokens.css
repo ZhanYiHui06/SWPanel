@@ -20,6 +20,8 @@
 
   /* Borders & rings */
   --border: #e5e5e5;
+  --border-strong: #d4d4d4;
+  --surface-hover: #fafafa;
   --input: #e5e5e5;
   --ring: #171717;
 
@@ -71,8 +73,10 @@
      Local fonts are bundled via @fontsource (see fonts.ts).
      Microsoft YaHei UI is the approved CJK fallback for enterprise Windows. */
   --font-sans: "Inter", "Microsoft YaHei UI", "Microsoft YaHei",
+    "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC",
     ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", "Microsoft YaHei UI", ui-monospace,
+  --font-mono: "JetBrains Mono", "Microsoft YaHei UI", "PingFang SC",
+    "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", ui-monospace,
     "SF Mono", "Cascadia Mono", Consolas, monospace;
 
   /* Scale (4px base unit) */

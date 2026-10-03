@@ -35,7 +35,11 @@ import type { SwpanelBridgeApi } from "../../../main/bridge/bridge-contract.js";
 import { PRODUCTION_DEFAULT_SCENARIO } from "../../fixtures/index.js";
 import { MockRepository } from "../mock-repository/mock-repository.js";
 import { resolveRepositoryScenario } from "../repository-provider.js";
+import { resolveRepositoryModeFrom } from "../repository-mode.js";
+import { broadcastRepositoryInvalidation, subscribeRepositoryInvalidation } from "../repository-invalidation.js";
+import { useRevalidateOnFocus } from "../repository-revalidation.js";
 import { BridgeModelRepository } from "./bridge-model-repository.js";
+import { HttpModelRepository } from "./http-model-repository.js";
 import { MockModelRepository } from "./mock-model-repository.js";
 import { UnavailableModelRepository } from "./unavailable-model-repository.js";
 import {
@@ -62,6 +66,13 @@ const DEFAULT_ENTRIES_REF: MutableRefObject<Map<string, QueryEntry>> = {
  */
 const NOOP = (): void => undefined;
 
+/**
+ * Provider-wide monotonic request id. It is NEVER reset by `invalidate()`, so a
+ * response of a request started before an invalidation can not be mistaken for
+ * the response of the request that replaced it.
+ */
+let nextRequestId = 0;
+
 interface QueryEntry {
   status: "loading" | "success" | "error";
   data: unknown;
@@ -80,6 +91,8 @@ interface ModelRepositoryContextValue {
   /** Bumped on every query resolution so ALL consumers re-read shared entries. */
   readonly tick: number;
   readonly entriesRef: MutableRefObject<Map<string, QueryEntry>>;
+  /** Bumped by focus/visibility revalidation (stale data stays visible while refetching). */
+  readonly revalidation: number;
   readonly invalidate: () => void;
   readonly notify: () => void;
 }
@@ -105,7 +118,11 @@ export function resolveModelRepository(options: {
     // typed as `SwpanelBridgeApi` and frozen; no generic channel access exists.
     return new BridgeModelRepository(globalThis.window.swpanel as SwpanelBridgeApi);
   }
-  if (options.isDevelopment) {
+  const mode = resolveRepositoryModeFrom(options);
+  if (mode === "http") {
+    return new HttpModelRepository();
+  }
+  if (mode === "mock") {
     // Explicit mock adapter for browser preview/tests ONLY — scenario selectors
     // keep the canonical fixture Models deterministic. Never used in product.
     return new MockModelRepository(
@@ -136,20 +153,39 @@ export function ModelRepositoryProvider({
   );
   const [version, setVersion] = useState(0);
   const [tick, setTick] = useState(0);
+  const [revalidation, setRevalidation] = useState(0);
   const entriesRef = useRef<Map<string, QueryEntry>>(new Map());
 
-  const invalidate = useCallback(() => {
+  /** Clears this provider's cache only (also the target of cross-provider invalidation). */
+  const invalidateLocal = useCallback(() => {
     entriesRef.current.clear();
     setVersion((current) => current + 1);
   }, []);
+
+  /** Public invalidation: clear locally, then tell dependent providers to refresh. */
+  const invalidate = useCallback(() => {
+    invalidateLocal();
+    broadcastRepositoryInvalidation("model");
+  }, [invalidateLocal]);
+
+  useEffect(
+    () => subscribeRepositoryInvalidation("model", invalidateLocal),
+    [invalidateLocal]
+  );
+
+  const revalidate = useCallback(() => {
+    setRevalidation((current) => current + 1);
+  }, []);
+  // Real data can change behind the UI's back; fixtures can not.
+  useRevalidateOnFocus(revalidate, resolved.mode === "bridge");
 
   const notify = useCallback(() => {
     setTick((current) => current + 1);
   }, []);
 
   const value = useMemo<ModelRepositoryContextValue>(
-    () => ({ repository: resolved, version, tick, entriesRef, invalidate, notify }),
-    [resolved, version, tick, invalidate, notify]
+    () => ({ repository: resolved, version, tick, revalidation, entriesRef, invalidate, notify }),
+    [resolved, version, tick, revalidation, invalidate, notify]
   );
 
   return <ModelRepositoryContext.Provider value={value}>{children}</ModelRepositoryContext.Provider>;
@@ -189,6 +225,7 @@ export function useModelQuery<T>(
   const context = useContext(ModelRepositoryContext);
   const entriesRef = context?.entriesRef ?? DEFAULT_ENTRIES_REF;
   const version = context?.version ?? 0;
+  const revalidation = context?.revalidation ?? 0;
   const notify = context?.notify ?? NOOP;
   const enabled = options.enabled ?? true;
   const [, forceRender] = useReducer((count: number) => count + 1, 0);
@@ -218,15 +255,22 @@ export function useModelQuery<T>(
   useEffect(() => {
     const current = entriesRef.current.get(key);
     if (current === undefined || !enabled) return;
-    const fetchKey = `${version}:${current.retryTick}`;
+    const fetchKey = `${version}:${revalidation}:${current.retryTick}`;
     if (current.fetchedFor === fetchKey) return;
     current.fetchedFor = fetchKey;
-    current.status = "loading";
-    current.error = null;
-    current.requestId += 1;
+    // Refetching a cached success (focus revalidation) keeps the data on screen.
+    const background = current.status === "success";
+    if (!background) {
+      current.status = "loading";
+      current.error = null;
+    }
+    nextRequestId += 1;
+    current.requestId = nextRequestId;
     const requestId = current.requestId;
-    forceRender();
-    notify();
+    if (!background) {
+      forceRender();
+      notify();
+    }
 
     void fetcherRef.current().then(
       (data) => {
@@ -245,6 +289,8 @@ export function useModelQuery<T>(
       (error: unknown) => {
         const latest = entriesRef.current.get(key);
         if (latest === undefined || latest.requestId !== requestId) return;
+        // A failed background refresh keeps the last good data instead of an error page.
+        if (background) return;
         latest.status = "error";
         latest.data = undefined;
         latest.error = toModelRepositoryError(error);
@@ -252,7 +298,7 @@ export function useModelQuery<T>(
         notify();
       }
     );
-  }, [enabled, entriesRef, key, version, entry.retryTick, notify]);
+  }, [enabled, entriesRef, key, version, revalidation, entry.retryTick, notify]);
 
   if (!enabled) {
     return { status: "idle", data: undefined, error: null, retry };

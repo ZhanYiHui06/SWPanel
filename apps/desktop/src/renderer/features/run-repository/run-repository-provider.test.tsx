@@ -1,12 +1,12 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { ModelingRun } from "@swpanel/domain";
 
 import { BridgeRunRepository } from "./bridge-run-repository.js";
 import { MockRunRepository } from "./mock-run-repository.js";
-import { RunRepositoryProvider, useRunEventStream } from "./run-repository-provider.js";
+import { RunRepositoryProvider, runStreamRecoveryPolicy, useRunEventStream } from "./run-repository-provider.js";
 import { MockRepository } from "../mock-repository/mock-repository.js";
 import { createFakeBridge } from "../../test/fake-bridge.js";
 import { DRAWING_IDS, REVISION_IDS } from "../../fixtures/index.js";
@@ -79,7 +79,17 @@ function readState(): { status: string; seq: string; events: string; progress: s
   };
 }
 
-afterEach(cleanup);
+const DEFAULT_POLICY = { ...runStreamRecoveryPolicy };
+
+beforeEach(() => {
+  // Real delays (1s/2s/4s...) would outlast waitFor's default timeout.
+  runStreamRecoveryPolicy.baseDelayMs = 0;
+});
+
+afterEach(() => {
+  cleanup();
+  Object.assign(runStreamRecoveryPolicy, DEFAULT_POLICY);
+});
 
 describe("useRunEventStream (snapshot-then-subscribe + reconnect)", () => {
   it("loads the snapshot, then subscribes from lastEventSequence + 1", async () => {
@@ -185,20 +195,56 @@ describe("useRunEventStream (snapshot-then-subscribe + reconnect)", () => {
     renderStream(repository, "run-1");
     await waitFor(() => expect(readState().status).toBe("live"));
 
-    // Three transient stream failures each recover via refetch; the fourth
-    // (still with no applied live events in between) exhausts the bounded
-    // recovery attempts and stops in a recoverable error state.
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    // Transient stream failures each recover via refetch; one more than the
+    // bounded attempts (with no applied live event and no stable period in
+    // between) stops in a recoverable error state.
+    const { maxAttempts } = runStreamRecoveryPolicy;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       fake.failRunStream("run-1", "RUN_EVENT_GAP", `gap ${attempt}`);
       await waitFor(() => expect(readState().status).toBe("live"));
     }
-    fake.failRunStream("run-1", "RUN_EVENT_GAP", "gap 4");
+    fake.failRunStream("run-1", "RUN_EVENT_GAP", "gap last");
     await waitFor(() => expect(readState().status).toBe("error"));
     expect(readState().error).toBe("RUN_EVENT_STREAM_LOST");
 
     await user.click(screen.getByRole("button", { name: "retry" }));
     await waitFor(() => expect(readState().status).toBe("live"));
     expect(readState().seq).toBe("0");
+  });
+
+  it("forgets earlier failures once the stream has been stable, so later blips recover again", async () => {
+    runStreamRecoveryPolicy.stableResetMs = 30;
+    const fake = createFakeBridge();
+    fake.addRun(makeRun({ id: "run-1", status: "RUNNING", stage: "MODELING" }));
+    const repository = new BridgeRunRepository(fake.api);
+    renderStream(repository, "run-1");
+    await waitFor(() => expect(readState().status).toBe("live"));
+
+    const { maxAttempts } = runStreamRecoveryPolicy;
+    for (let attempt = 1; attempt <= maxAttempts + 2; attempt++) {
+      fake.failRunStream("run-1", "RUN_EVENT_STREAM_LOST", `lost ${attempt}`);
+      await waitFor(() => expect(readState().status).toBe("live"));
+      // Wait for the stability window so the failure counter resets.
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    }
+    expect(readState().status).toBe("live");
+  });
+
+  it("backs off exponentially between reconnect attempts and exposes nextRetryAt", async () => {
+    runStreamRecoveryPolicy.baseDelayMs = 120;
+    const fake = createFakeBridge();
+    fake.addRun(makeRun({ id: "run-1", status: "RUNNING", stage: "MODELING" }));
+    const repository = new BridgeRunRepository(fake.api);
+    renderStream(repository, "run-1");
+    await waitFor(() => expect(readState().status).toBe("live"));
+
+    const startedAt = Date.now();
+    fake.failRunStream("run-1", "RUN_EVENT_STREAM_LOST", "lost");
+    await waitFor(() => expect(readState().status).toBe("recovering"));
+    // Old data stays rendered while waiting to reconnect.
+    expect(screen.getByTestId("runstatus").textContent).toBe("RUNNING");
+    await waitFor(() => expect(readState().status).toBe("live"));
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(100);
   });
 
   it("shows the recovering state while the refetch is pending, then resumes", async () => {

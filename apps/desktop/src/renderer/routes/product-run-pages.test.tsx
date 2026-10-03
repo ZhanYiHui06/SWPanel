@@ -176,7 +176,7 @@ describe("Drawing Overview (product mode) creates Runs", () => {
     const fake = createSeededFake();
     renderProduct([OVERVIEW_ROUTE], fake, [overviewPath]);
 
-    expect(await screen.findByRole("img", { name: "工程图纸预览" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /开始自动建模/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /开始自动建模/ }));
     const dialog = screen.getByRole("dialog", { name: "确认开始自动建模" });
@@ -200,7 +200,7 @@ describe("Drawing Overview (product mode) creates Runs", () => {
     const fake = createSeededFake({ fail: ["runs.create"] });
     renderProduct([OVERVIEW_ROUTE], fake, [overviewPath]);
 
-    await screen.findByRole("img", { name: "工程图纸预览" });
+    await screen.findByRole("button", { name: /开始自动建模/ });
     await user.click(screen.getByRole("button", { name: /开始自动建模/ }));
     await user.click(
       within(screen.getByRole("dialog", { name: "确认开始自动建模" })).getByRole("button", {
@@ -208,14 +208,30 @@ describe("Drawing Overview (product mode) creates Runs", () => {
       })
     );
 
-    // Truthful error state with retry.
+    // Truthful error state: the dialog stays open with a Chinese message and
+    // the confirm button doubles as retry.
     expect(await screen.findByText("创建建模任务失败")).toBeInTheDocument();
-    expect(screen.getByText(/暂时不可用/)).toBeInTheDocument();
+    expect(screen.getByText(/未连接到 SWPanel 服务/)).toBeInTheDocument();
+    const retryDialog = screen.getByRole("dialog", { name: "确认开始自动建模" });
 
     fake.clearFailure("runs.create");
-    await user.click(screen.getByRole("button", { name: "重试" }));
+    await user.click(within(retryDialog).getByRole("button", { name: /确认并开始/ }));
     expect(await screen.findByText(/任务已加入等待队列/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(fake.state().runs).toHaveLength(1);
+  });
+
+  it("keeps the confirm button disabled while the request is in flight (no duplicate Runs)", async () => {
+    const user = userEvent.setup();
+    const fake = createSeededFake();
+    renderProduct([OVERVIEW_ROUTE], fake, [overviewPath]);
+
+    await user.click(await screen.findByRole("button", { name: /开始自动建模/ }));
+    const dialog = screen.getByRole("dialog", { name: "确认开始自动建模" });
+    const confirm = within(dialog).getByRole("button", { name: /确认并开始/ });
+    await user.dblClick(confirm);
+    await screen.findByText(/任务已加入等待队列/);
+    expect(fake.calls.filter((call) => call.startsWith("runs.create:"))).toHaveLength(1);
   });
 });
 
@@ -329,7 +345,7 @@ describe("建模任务 (product mode)", () => {
     expect((await screen.findAllByText("PDJF480.01.17C-4")).length).toBeGreaterThan(0);
     await user.click(within(queueItemFor("R02")).getByRole("button", { name: "取消" }));
     expect(await screen.findByText("Run R02 取消未完成")).toBeInTheDocument();
-    expect(screen.getByText(/CANCEL_CLEANUP_PENDING/)).toBeInTheDocument();
+    expect(screen.getByText(/清理尚未完成/)).toBeInTheDocument();
     cleanup();
 
     const already = createRunsWorldFake({
@@ -409,6 +425,37 @@ describe("Run Detail (product mode)", () => {
     expect(await screen.findByText("任务已在队列中，将按顺序自动执行。")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "取消任务" }));
     expect(await screen.findByText("Run R01 已取消")).toBeInTheDocument();
+  });
+
+  it("asks for a second confirmation before cancelling a RUNNING run", async () => {
+    const user = userEvent.setup();
+    const fake = createSeededFake();
+    fake.addRun(makeRun({ id: "run-running", number: "R01", status: "RUNNING", stage: "MODELING", startedAt: NOW }));
+    renderProduct([RUN_DETAIL_ROUTE], fake, ["/runs/run-running"]);
+
+    await user.click(await screen.findByRole("button", { name: "取消任务" }));
+    const dialog = screen.getByRole("dialog", { name: "取消正在执行的任务" });
+    expect(within(dialog).getByText(/清理本次已生成的全部文件/)).toBeInTheDocument();
+    expect(fake.calls.some((call) => call.startsWith("runs.cancel:"))).toBe(false);
+
+    await user.click(within(dialog).getByRole("button", { name: "继续运行" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(fake.calls.some((call) => call.startsWith("runs.cancel:"))).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "取消任务" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "确认取消任务" }));
+    expect(await screen.findByText("Run R01 已取消")).toBeInTheDocument();
+    expect(fake.calls.some((call) => call.startsWith("runs.cancel:"))).toBe(true);
+  });
+
+  it("explains a failure in Chinese and keeps the raw code/message as technical details", async () => {
+    const fake = createSeededFake();
+    fake.addRun(
+      makeRun({ id: "run-failed", number: "R01", status: "FAILED", failureCode: "SOLIDWORKS_UNAVAILABLE", failureMessage: "SolidWorks 自动重建失败", completedAt: NOW })
+    );
+    renderProduct([RUN_DETAIL_ROUTE], fake, ["/runs/run-failed"]);
+    expect(await screen.findByText(/SolidWorks 不可用，请联系管理员/)).toBeInTheDocument();
+    expect(screen.getByText("技术详情")).toBeInTheDocument();
   });
 
   it("shows the failure message and offers a new Run for a FAILED run", async () => {
@@ -520,7 +567,8 @@ describe("Run Detail (product mode)", () => {
 
     // The request is not seeded: truthful error state with retry.
     expect(await screen.findByText("补充信息加载失败")).toBeInTheDocument();
-    expect(screen.getByText(/not found/)).toBeInTheDocument();
+    // Raw English server messages are never shown: the mapped Chinese one is.
+    expect(screen.getByText(/请求的对象不存在或已被删除/)).toBeInTheDocument();
 
     fake.addClarification(makeOpenClarification("run-clar"));
     await user.click(screen.getByRole("button", { name: "重试" }));
@@ -543,7 +591,8 @@ describe("Run Detail (product mode)", () => {
     await waitFor(() => {
       const detailCalls = fake.calls.filter((call) => call.startsWith("runs.getDetail:"));
       expect(detailCalls.length).toBeGreaterThanOrEqual(2);
-    });
+      // The first recovery waits baseDelayMs (1s) before refetching.
+    }, { timeout: 3000 });
     expect(screen.getByRole("heading", { name: "R01" })).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "建模执行阶段" })).toBeInTheDocument();
   });

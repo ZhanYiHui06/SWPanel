@@ -27,7 +27,7 @@ import {
 
 const UNAVAILABLE_ERROR = new DrawingRepositoryError(
   "RUNNER_UNAVAILABLE",
-  "SWPanel 桌面桥接不可用：请通过 Electron 桌面应用启动，并确认图纸处理服务（Runner）已就绪。"
+  "未连接到 SWPanel 服务，请确认后端服务已启动。"
 );
 
 export class UnavailableDrawingRepository implements DrawingRepository {

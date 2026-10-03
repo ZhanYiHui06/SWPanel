@@ -11,6 +11,11 @@
       "types": "./src/index.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./product-events": {
+      "types": "./src/phase4/product-events.ts",
+      "import": "./dist/phase4/product-events.js",
+      "default": "./dist/phase4/product-events.js"
     }
   },
   "scripts": {

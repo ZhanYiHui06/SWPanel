@@ -12,6 +12,7 @@ import {
   DeleteCostReportDialog,
   DeleteRevisionDialog,
   DeleteRunDialog,
+  checkPickedDrawingFile,
   revisionDependencyMessage
 } from "./DrawingDialogs.js";
 
@@ -26,6 +27,18 @@ function ToastHost(): React.JSX.Element {
 function dialogShell(children: React.ReactNode) {
   return render(<NotificationProvider recoverOnMount={false}>{children}<ToastHost /></NotificationProvider>);
 }
+
+describe("checkPickedDrawingFile", () => {
+  const base = { token: "t", sha256: "a".repeat(64) };
+  it("accepts PDF/DWG/DXF within 20 MiB", () => {
+    expect(checkPickedDrawingFile({ ...base, fileName: "a.pdf", format: "PDF", sizeBytes: 1024 })).toBeNull();
+    expect(checkPickedDrawingFile({ ...base, fileName: "a.dwg", format: "DWG", sizeBytes: 20 * 1024 * 1024 })).toBeNull();
+  });
+  it("rejects oversized files and unsupported formats with Chinese messages", () => {
+    expect(checkPickedDrawingFile({ ...base, fileName: "a.pdf", format: "PDF", sizeBytes: 20 * 1024 * 1024 + 1 })).toMatch(/超过 20 MB/);
+    expect(checkPickedDrawingFile({ ...base, fileName: "a.png", format: "PNG" as never, sizeBytes: 10 })).toMatch(/仅支持 PDF/);
+  });
+});
 
 describe("revisionDependencyMessage", () => {
   it("returns null with no dependencies", () => {
@@ -86,6 +99,7 @@ describe("DeleteRevisionDialog dependency blocking", () => {
     );
     expect(screen.queryByText(/不可直接删除/)).toBeNull();
     expect(screen.getByRole("button", { name: "确认删除版本" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "确认删除版本" })).toHaveClass("btn-danger");
   });
 });
 
@@ -138,7 +152,7 @@ describe("DeleteRunDialog", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "确认删除记录" }));
-    expect(await screen.findByText(/only terminal runs can be deleted/)).toBeInTheDocument();
+    expect(await screen.findByText("提交的内容不符合要求，请检查后重试")).toBeInTheDocument();
     expect(mock.getRun(RUN_IDS.mainR05)).toBeDefined();
     expect(onDeleted).not.toHaveBeenCalled();
   });
@@ -186,7 +200,7 @@ describe("DeleteCostReportDialog", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "确认删除报告" }));
-    expect(await screen.findByText(/unknown cost report/)).toBeInTheDocument();
+    expect(await screen.findByText("提交的内容不符合要求，请检查后重试")).toBeInTheDocument();
     expect(onDeleted).not.toHaveBeenCalled();
   });
 });

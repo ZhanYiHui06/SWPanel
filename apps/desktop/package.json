@@ -8,6 +8,8 @@
     "dev:renderer": "vite --config vite.config.ts",
     "typecheck": "tsc -p tsconfig.renderer.json && tsc -p tsconfig.electron.json --noEmit",
     "test": "vitest run --config vitest.config.ts",
+    "test:renderer": "vitest run --config vitest.config.ts src/renderer",
+    "test:electron": "vitest run --config vitest.config.ts src/main src/preload",
     "build:renderer": "vite build --config vite.config.ts",
     "build:electron": "node scripts/build-electron.mjs",
     "build": "npm run build:renderer && npm run build:electron"

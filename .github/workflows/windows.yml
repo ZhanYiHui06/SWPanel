@@ -1,0 +1,62 @@
+name: Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, lint, test
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:packages
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+  package:
+    name: Package and installer
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run package:win
+      - run: npm run make:win
+      - name: Packaged app smoke test
+        run: npx playwright test --config=playwright.electron.production.config.ts
+      - name: Upload installers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swpanel-windows-installers
+          path: |
+            installers/
+            .scratch/*.json
+          if-no-files-found: warn
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-production
+          path: playwright-report-production/
+          if-no-files-found: ignore

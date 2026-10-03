@@ -1,3 +1,4 @@
+import type { CostEstimateInputSnapshot, CostEstimateResult } from "@swpanel/domain";
 import {
   Button,
   Card,
@@ -9,14 +10,16 @@ import {
 import { type ReactNode, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
-import { resolveDrawingId, resolveReportId, resolveRevisionId } from "../features/ids.js";
 import {
-  basisSuffix,
+  EMPTY_VALUE,
   formatCny,
-  formatSmartDate,
-  formatVolumeCubicMeters,
-  stockTypeName
-} from "../features/presentation.js";
+  formatDensity,
+  formatPriceWithUnit,
+  formatVolumeM3
+} from "../features/cost-format.js";
+import { describeError } from "../features/error-messages.js";
+import { resolveDrawingId, resolveReportId, resolveRevisionId } from "../features/ids.js";
+import { basisSuffix, formatSmartDate, stockTypeName } from "../features/presentation.js";
 import { useRepository } from "../features/repository-provider.js";
 import { useDrawingRepository } from "../features/bridge-repository/drawing-repository-provider.js";
 import { useDrawingDetailQuery, useRevisionDetailQuery } from "../features/bridge-repository/index.js";
@@ -66,6 +69,212 @@ function ReportProperty({
   );
 }
 
+/** Everything the report body needs, independent of mock / product data sources. */
+interface ReportViewData {
+  readonly label: string;
+  readonly createdAt: string;
+  readonly quantity: number;
+  readonly drawingNumber: string;
+  readonly drawingName: string;
+  readonly revisionText: ReactNode;
+  readonly modelText: string;
+  readonly input: CostEstimateInputSnapshot;
+  readonly result: CostEstimateResult;
+}
+
+/**
+ * Report header + the five report sections. Every number is read straight from
+ * the frozen snapshot (the domain already rounds money to fen): the page never
+ * divides rounded totals again and never substitutes defaults for missing data.
+ */
+function CostReportView({
+  data,
+  now,
+  costsBackLink,
+  exportTitle,
+  onDelete,
+  children
+}: {
+  readonly data: ReportViewData;
+  readonly now: Date;
+  readonly costsBackLink: string;
+  readonly exportTitle: string;
+  readonly onDelete: () => void;
+  readonly children?: ReactNode;
+}): React.JSX.Element {
+  const { input, result, quantity } = data;
+  const material = input.costData.materials.find((candidate) => candidate.id === input.materialId);
+  const pieceLines = result.fixedCostLines.filter((line) => line.basis === "PER_PIECE");
+  const batchLines = result.fixedCostLines.filter((line) => line.basis === "PER_BATCH");
+  const batchTotal = batchLines.reduce((sum, line) => sum + line.subtotal, 0);
+  const appliedFixedCosts = input.costData.fixedCosts.filter((fixedCost) => fixedCost.defaultEnabled);
+
+  return (
+    <div className="page-content" data-route-id="cost-report">
+      <div className="workspace-header">
+        <div className="workspace-header-top">
+          <div>
+            <div className="flex-row-gap-3">
+              <h1 className="workspace-drawing-number" style={{ fontSize: 18 }}>
+                {data.label}
+              </h1>
+              <StatusBadge variant="no-model">内部参考</StatusBadge>
+            </div>
+            <div className="workspace-drawing-name" style={{ marginTop: 6 }}>
+              成本测算报告 · {formatSmartDate(data.createdAt, now)} 生成
+            </div>
+          </div>
+          <div className="workspace-header-actions">
+            <Link className="btn btn-ghost btn-sm" to={costsBackLink}>
+              返回成本测算
+            </Link>
+            <Button variant="secondary" size="sm" disabled buttonProps={{ title: exportTitle }}>
+              导出
+            </Button>
+            <Button variant="ghost-muted" size="sm" onClick={onDelete}>
+              删除报告
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {children}
+
+      <div className="section">
+        <Card>
+          <CardBody>
+            <ReportSection number="01" title="零件与模型信息">
+              <div className="property-list">
+                <ReportProperty label="图纸编号" value={data.drawingNumber} />
+                <ReportProperty label="零件名称" value={data.drawingName} />
+                <ReportProperty label="版本" value={data.revisionText} mono />
+                <ReportProperty label="依据模型" value={data.modelText} mono />
+                <ReportProperty label="测算数量" value={`${quantity} 件`} mono />
+              </div>
+            </ReportSection>
+
+            <ReportSection number="02" title="毛坯与原料参数">
+              <div className="property-list">
+                <ReportProperty label="毛坯形式" value={stockTypeName(input.stockType)} />
+                <ReportProperty label="毛坯规格" value={input.stockSpec} mono />
+                <ReportProperty
+                  label="加工余量"
+                  value={input.allowances.map((a) => `${a.name.replace("默认余量", "")} +${a.valueMm} mm`).join("，") || "无"}
+                />
+                <ReportProperty
+                  label="原料体积（估算）"
+                  value={formatVolumeM3(result.rawStockVolume)}
+                  mono
+                />
+              </div>
+            </ReportSection>
+
+            <ReportSection number="03" title="成本计算依据">
+              <div className="property-list">
+                <ReportProperty
+                  label="选用材料"
+                  value={
+                    material
+                      ? `${material.name}（密度 ${formatDensity(material.density, material.densityUnit)}）`
+                      : EMPTY_VALUE
+                  }
+                />
+                <ReportProperty
+                  label="材料基准价"
+                  value={material ? formatPriceWithUnit(material.purchasePrice, material.priceUnit) : EMPTY_VALUE}
+                  mono
+                />
+                <ReportProperty
+                  label="固定成本"
+                  value={
+                    appliedFixedCosts
+                      .map((f) => `${f.name} ${formatCny(f.amount)} ${basisSuffix(f.basis)}`)
+                      .join("，") || "无"
+                  }
+                />
+                <ReportProperty
+                  label="快照时间"
+                  value={formatSmartDate(input.capturedAt, now)}
+                  mono
+                />
+              </div>
+            </ReportSection>
+
+            <ReportSection number="04" title="成本明细">
+              <div className="property-list">
+                <ReportProperty
+                  label={`材料费合计（${quantity} 件）`}
+                  value={formatCny(result.materialCost)}
+                  mono
+                />
+                {pieceLines.map((line, index) => (
+                  <ReportProperty
+                    key={`piece-${index}-${line.name}`}
+                    label={`单件${line.name}`}
+                    value={formatCny(line.subtotal)}
+                    mono
+                  />
+                ))}
+                {batchLines.map((line, index) => (
+                  <ReportProperty
+                    key={`batch-${index}-${line.name}`}
+                    label={`批次${line.name}`}
+                    value={`${formatCny(line.subtotal)}（整批）`}
+                    mono
+                  />
+                ))}
+              </div>
+            </ReportSection>
+
+            <ReportSection number="05" title="成本测算结果">
+              <div>
+                <div className="cost-result-row">
+                  <span className="cost-result-label">单件估算成本</span>
+                  <span className="cost-result-value">{formatCny(result.perPieceCost)}</span>
+                </div>
+                {batchLines.length > 0 && (
+                  <div className="cost-result-row">
+                    <span className="cost-result-label">批次固定成本合计</span>
+                    <span className="cost-result-value">{formatCny(batchTotal)}</span>
+                  </div>
+                )}
+                <div className="cost-result-row highlight">
+                  <span className="cost-result-label">总估算成本（{quantity} 件）</span>
+                  <span className="cost-result-value">{formatCny(result.totalCost)}</span>
+                </div>
+              </div>
+            </ReportSection>
+          </CardBody>
+        </Card>
+      </div>
+
+      <div className="report-disclaimer mt-6">
+        成本测算报告为内部成本参考，不构成最终对客报价。
+      </div>
+    </div>
+  );
+}
+
+function NotFoundReportState({ costsBackLink }: { readonly costsBackLink: string | null }): React.JSX.Element {
+  return (
+    <div className="page-content" data-route-id="cost-report">
+      <Card>
+        <CardBody>
+          <EmptyState
+            title="未找到成本测算报告"
+            description="报告参数无效或报告已被删除，请返回成本测算列表重新选择。"
+            action={
+              <Link to={costsBackLink ?? "/drawings"} className="btn btn-secondary btn-sm">
+                {costsBackLink === null ? "返回图纸库" : "返回成本测算"}
+              </Link>
+            }
+          />
+        </CardBody>
+      </Card>
+    </div>
+  );
+}
+
 export function CostReportPage(props: CostReportPageProps): React.JSX.Element {
   const drawingRepository = useDrawingRepository();
   if (drawingRepository.mode !== "mock") {
@@ -84,76 +293,105 @@ function ProductCostReportPage({ now = new Date() }: CostReportPageProps): React
   const navigate = useNavigate();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const { data: drawingDetail } = useDrawingDetailQuery(drawingId);
-  const { data: revisionDetail } = useRevisionDetailQuery(drawingId, revisionId);
-  const { data: reportDetail, loading, error } = useCostReportDetailQuery(reportId);
+  const drawingQuery = useDrawingDetailQuery(drawingId);
+  const revisionQuery = useRevisionDetailQuery(drawingId, revisionId);
+  const reportQuery = useCostReportDetailQuery(reportId);
+  const { data: drawingDetail } = drawingQuery;
+  const { data: revisionDetail } = revisionQuery;
+  const { data: reportDetail, loading, error } = reportQuery;
 
   if (!drawingId || !revisionId || !reportId) {
     return <Navigate to="/drawings" replace />;
   }
 
+  const costsBackLink = `/drawings/${drawingId}/revisions/${revisionId}/costs`;
+
   if (loading && !reportDetail) {
     return (
       <div className="page-content" data-route-id="cost-report">
-        <div className="section">
-          <p className="text-muted">正在加载成本测算报告...</p>
+        <div className="data-sheet" role="status" aria-live="polite">
+          <div className="empty-state">
+            <div className="empty-state-title">正在加载成本测算报告…</div>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (error || !reportDetail || !drawingDetail || !revisionDetail) {
+  if (error !== null && error.code === "NOT_FOUND") {
+    return <NotFoundReportState costsBackLink={costsBackLink} />;
+  }
+
+  const loadError = error ?? (reportDetail === null ? null : drawingQuery.error ?? revisionQuery.error);
+  if (loadError !== null || reportDetail === null) {
+    const described = describeError(loadError);
     return (
       <div className="page-content" data-route-id="cost-report">
-        <Card>
-          <CardBody>
-            <EmptyState
-              title="未找到成本测算报告"
-              description="报告参数无效或报告已被删除，请返回成本测算列表重新选择。"
-            />
-          </CardBody>
-        </Card>
+        <div className="data-sheet">
+          <InlineNotice tone="error" title="成本测算报告加载失败" role="alert">
+            {described.message}
+            {described.code !== undefined && (
+              <span className="text-xs text-muted text-mono" data-error-code={described.code}>
+                {" "}（技术详情：{described.code}）
+              </span>
+            )}
+          </InlineNotice>
+          <div className="flex-row-gap-3 mt-4" style={{ justifyContent: "flex-start" }}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                reportQuery.retry();
+                drawingQuery.retry();
+                revisionQuery.retry();
+              }}
+            >
+              重试
+            </Button>
+            <Link to={costsBackLink} className="btn btn-ghost btn-sm">
+              返回成本测算
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
 
-  const { snapshot } = reportDetail;
-  const { input, result } = snapshot;
-  const model = revisionDetail.models.find((m) => m.modelId === reportDetail.modelId);
-  const material = input.costData.materials.find((m) => m.id === input.materialId);
-  const packagingLine = result.fixedCostLines.find((line) => line.basis === "PER_BATCH");
-  const costsBackLink = `/drawings/${drawingId}/revisions/${revisionId}/costs`;
-
-  return (
-    <div className="page-content" data-route-id="cost-report">
-      <div className="workspace-header">
-        <div className="workspace-header-top">
-          <div>
-            <div className="flex-row-gap-3">
-              <h1 className="workspace-drawing-number" style={{ fontSize: 18 }}>
-                {reportDetail.label}
-              </h1>
-              <StatusBadge variant="no-model">内部参考</StatusBadge>
-            </div>
-            <div className="workspace-drawing-name" style={{ marginTop: 6 }}>
-              成本测算报告 · {formatSmartDate(reportDetail.createdAt, now)} 生成
-            </div>
-          </div>
-          <div className="workspace-header-actions">
-            <Link className="btn btn-ghost btn-sm" to={costsBackLink}>
-              返回成本测算
-            </Link>
-            <Button variant="secondary" size="sm" disabled buttonProps={{ title: "Phase 7 尚未实现导出" }}>
-              导出
-            </Button>
-            <Button variant="ghost-muted" size="sm" onClick={() => setDeleteOpen(true)}>
-              删除报告
-            </Button>
+  if (!drawingDetail || !revisionDetail) {
+    // Report is present; the identity context is still being fetched.
+    return (
+      <div className="page-content" data-route-id="cost-report">
+        <div className="data-sheet" role="status" aria-live="polite">
+          <div className="empty-state">
+            <div className="empty-state-title">正在加载成本测算报告…</div>
           </div>
         </div>
       </div>
+    );
+  }
 
-      {deleteOpen && reportDetail !== undefined && (
+  const model = revisionDetail.models.find((candidate) => candidate.modelId === reportDetail.modelId);
+  const data: ReportViewData = {
+    label: reportDetail.label,
+    createdAt: reportDetail.createdAt,
+    quantity: reportDetail.quantity,
+    drawingNumber: drawingDetail.drawing.drawingNumber,
+    drawingName: drawingDetail.drawing.name,
+    revisionText: revisionDetail.revision.revisionLabel,
+    modelText: model?.modelLabel ?? EMPTY_VALUE,
+    input: reportDetail.snapshot.input,
+    result: reportDetail.snapshot.result
+  };
+
+  return (
+    <CostReportView
+      data={data}
+      now={now}
+      costsBackLink={costsBackLink}
+      exportTitle="导出功能暂未开放"
+      onDelete={() => setDeleteOpen(true)}
+    >
+      {deleteOpen && (
         <DeleteCostReportDialog
           repository={costRepository}
           costReportId={reportDetail.costReportId}
@@ -167,112 +405,7 @@ function ProductCostReportPage({ now = new Date() }: CostReportPageProps): React
           }}
         />
       )}
-
-      <div className="section">
-        <Card>
-          <CardBody>
-            <ReportSection number="01" title="零件与模型信息">
-              <div className="report-properties-grid">
-                <ReportProperty label="图纸编号" value={drawingDetail.drawing.drawingNumber} />
-                <ReportProperty label="零件名称" value={drawingDetail.drawing.name} />
-                <ReportProperty label="版本" value={revisionDetail.revision.revisionLabel} mono />
-                <ReportProperty label="依据模型" value={model?.modelLabel ?? reportDetail.modelId} mono />
-                <ReportProperty label="测算数量" value={`${reportDetail.quantity} 件`} mono />
-              </div>
-            </ReportSection>
-
-            <ReportSection number="02" title="毛坯与原料参数">
-              <div className="report-properties-grid">
-                <ReportProperty label="毛坯形式" value={stockTypeName(input.stockType)} />
-                <ReportProperty label="毛坯规格" value={input.stockSpec} mono />
-                <ReportProperty
-                  label="加工余量"
-                  value={input.allowances.map((a) => `${a.name.replace("默认余量", "")} +${a.valueMm} mm`).join("，") || "无"}
-                />
-                <ReportProperty
-                  label="原料体积 (估算)"
-                  value={formatVolumeCubicMeters(result.rawStockVolume)}
-                  mono
-                />
-              </div>
-            </ReportSection>
-
-            <ReportSection number="03" title="成本计算依据">
-              <div className="report-properties-grid">
-                <ReportProperty
-                  label="选用材料"
-                  value={material ? `${material.name} (密度 ${material.density ?? 7.85} ${material.densityUnit ?? "g/cm³"})` : "—"}
-                />
-                <ReportProperty
-                  label="材料基准价"
-                  value={material ? `¥${material.purchasePrice} / ${material.priceUnit}` : "—"}
-                  mono
-                />
-                <ReportProperty
-                  label="固定成本"
-                  value={input.costData.fixedCosts.map((f) => `${f.name} ¥${f.amount}${basisSuffix(f.basis)}`).join("，") || "无"}
-                />
-                <ReportProperty
-                  label="快照时间"
-                  value={formatSmartDate(input.capturedAt, now)}
-                  mono
-                />
-              </div>
-            </ReportSection>
-
-            <ReportSection number="04" title="成本明细">
-              <div className="report-properties-grid">
-                <ReportProperty
-                  label="单件材料费"
-                  value={formatCny(result.materialCost / (reportDetail.quantity || 1))}
-                  mono
-                />
-                {result.fixedCostLines
-                  .filter((line) => line.basis === "PER_PIECE")
-                  .map((line) => (
-                    <ReportProperty
-                      key={line.name}
-                      label={`单件${line.name}`}
-                      value={formatCny(line.subtotal)}
-                      mono
-                    />
-                  ))}
-                {packagingLine && (
-                  <ReportProperty
-                    label={`批次${packagingLine.name}`}
-                    value={`${formatCny(packagingLine.subtotal)} (分摊 ${formatCny(packagingLine.subtotal / (reportDetail.quantity || 1))} / 件)`}
-                    mono
-                  />
-                )}
-              </div>
-            </ReportSection>
-
-            <ReportSection number="05" title="测算汇总结果">
-              <div className="report-properties-grid">
-                <ReportProperty
-                  label="预估单件成本"
-                  value={formatCny(result.perPieceCost)}
-                  mono
-                />
-                <ReportProperty
-                  label={`总估算成本 (${reportDetail.quantity} 件)`}
-                  value={
-                    <span style={{ fontSize: 18, fontWeight: 700, color: "var(--color-primary-600, #2563eb)" }}>
-                      {formatCny(result.totalCost)}
-                    </span>
-                  }
-                  mono
-                />
-              </div>
-            </ReportSection>
-          </CardBody>
-        </Card>
-      </div>
-
-      <InlineNotice tone="neutral" className="mt-6">
-        成本测算报告为内部成本参考，不构成最终对客报价。
-      </InlineNotice>
-    </div>
+    </CostReportView>
   );
 }
 
@@ -307,57 +440,33 @@ function MockCostReportPage({ now = new Date() }: CostReportPageProps): React.JS
     .find((candidate) => candidate.id === reportId && candidate.revisionId === revisionId);
   const drawing = repository.getDrawing(drawingId);
   const revision = repository.getRevision(revisionId);
-
-  if (report === undefined || drawing === undefined || revision === undefined) {
-    return (
-      <div className="page-content" data-route-id="cost-report">
-        <Card>
-          <CardBody>
-            <EmptyState
-              title="未找到成本测算报告"
-              description="报告参数无效或报告已被删除，请返回成本测算列表重新选择。"
-            />
-          </CardBody>
-        </Card>
-      </div>
-    );
-  }
-
-  const { input, result } = report.snapshot;
-  const model = repository.getModel(report.modelId);
-  const material = input.costData.materials.find((candidate) => candidate.id === input.materialId);
-  const packagingLine = result.fixedCostLines.find((line) => line.basis === "PER_BATCH");
   const costsBackLink = `/drawings/${drawingId}/revisions/${revisionId}/costs`;
 
-  return (
-    <div className="page-content" data-route-id="cost-report">
-      <div className="workspace-header">
-        <div className="workspace-header-top">
-          <div>
-            <div className="flex-row-gap-3">
-              <h1 className="workspace-drawing-number" style={{ fontSize: 18 }}>
-                {report.label}
-              </h1>
-              <StatusBadge variant="no-model">内部参考</StatusBadge>
-            </div>
-            <div className="workspace-drawing-name" style={{ marginTop: 6 }}>
-              成本测算报告 · {formatSmartDate(report.createdAt, now)} 生成
-            </div>
-          </div>
-          <div className="workspace-header-actions">
-            <Link className="btn btn-ghost btn-sm" to={costsBackLink}>
-              返回成本测算
-            </Link>
-            <Button variant="secondary" size="sm" disabled buttonProps={{ title: "Phase 1 尚未实现导出" }}>
-              导出
-            </Button>
-            <Button variant="ghost-muted" size="sm" onClick={() => setDeleteOpen(true)}>
-              删除报告
-            </Button>
-          </div>
-        </div>
-      </div>
+  if (report === undefined || drawing === undefined || revision === undefined) {
+    return <NotFoundReportState costsBackLink={costsBackLink} />;
+  }
 
+  const model = repository.getModel(report.modelId);
+  const data: ReportViewData = {
+    label: report.label,
+    createdAt: report.createdAt,
+    quantity: report.quantity,
+    drawingNumber: drawing.drawingNumber,
+    drawingName: drawing.name,
+    revisionText: revision.sequence,
+    modelText: model?.number ?? report.modelId,
+    input: report.snapshot.input,
+    result: report.snapshot.result
+  };
+
+  return (
+    <CostReportView
+      data={data}
+      now={now}
+      costsBackLink={costsBackLink}
+      exportTitle="导出功能暂未开放"
+      onDelete={() => setDeleteOpen(true)}
+    >
       {deleteOpen && (
         <DeleteCostReportDialog
           repository={deleteRepository}
@@ -371,112 +480,7 @@ function MockCostReportPage({ now = new Date() }: CostReportPageProps): React.JS
           }}
         />
       )}
-
-      <div className="section">
-        <Card>
-          <CardBody>
-            <ReportSection number="01" title="零件与模型信息">
-              <div className="report-properties-grid">
-                <ReportProperty label="图纸编号" value={drawing.drawingNumber} />
-                <ReportProperty label="零件名称" value={drawing.name} />
-                <ReportProperty label="版本" value={revision.sequence} mono />
-                <ReportProperty label="依据模型" value={model?.number ?? report.modelId} mono />
-                <ReportProperty label="测算数量" value={`${report.quantity} 件`} mono />
-              </div>
-            </ReportSection>
-
-            <ReportSection number="02" title="毛坯与原料参数">
-              <div className="report-properties-grid">
-                <ReportProperty label="毛坯形式" value={stockTypeName(input.stockType)} />
-                <ReportProperty label="毛坯规格" value={input.stockSpec} mono />
-                <ReportProperty
-                  label="加工余量"
-                  value={input.allowances.map((a) => `${a.name.replace("默认余量", "")} +${a.valueMm} mm`).join("，") || "无"}
-                />
-                <ReportProperty
-                  label="原料体积 (估算)"
-                  value={formatVolumeCubicMeters(result.rawStockVolume)}
-                  mono
-                />
-              </div>
-            </ReportSection>
-
-            <ReportSection number="03" title="成本计算依据">
-              <div className="report-properties-grid">
-                <ReportProperty
-                  label="选用材料"
-                  value={material ? `${material.name} (密度 ${material.density ?? 7.85} ${material.densityUnit ?? "g/cm³"})` : "—"}
-                />
-                <ReportProperty
-                  label="材料基准价"
-                  value={material ? `¥${material.purchasePrice} / ${material.priceUnit}` : "—"}
-                  mono
-                />
-                <ReportProperty
-                  label="固定成本"
-                  value={input.costData.fixedCosts.map((f) => `${f.name} ¥${f.amount}${basisSuffix(f.basis)}`).join("，") || "无"}
-                />
-                <ReportProperty
-                  label="快照时间"
-                  value={formatSmartDate(input.capturedAt, now)}
-                  mono
-                />
-              </div>
-            </ReportSection>
-
-            <ReportSection number="04" title="成本明细">
-              <div className="report-properties-grid">
-                <ReportProperty
-                  label="单件材料费"
-                  value={formatCny(result.materialCost / (report.quantity || 1))}
-                  mono
-                />
-                {result.fixedCostLines
-                  .filter((line) => line.basis === "PER_PIECE")
-                  .map((line) => (
-                    <ReportProperty
-                      key={line.name}
-                      label={`单件${line.name}`}
-                      value={formatCny(line.subtotal)}
-                      mono
-                    />
-                  ))}
-                {packagingLine && (
-                  <ReportProperty
-                    label={`批次${packagingLine.name}`}
-                    value={`${formatCny(packagingLine.subtotal)} (分摊 ${formatCny(packagingLine.subtotal / (report.quantity || 1))} / 件)`}
-                    mono
-                  />
-                )}
-              </div>
-            </ReportSection>
-
-            <ReportSection number="05" title="成本测算结果">
-              <div className="report-properties-grid">
-                <ReportProperty
-                  label="预估单件成本"
-                  value={formatCny(result.perPieceCost)}
-                  mono
-                />
-                <ReportProperty
-                  label={`总估算成本（${report.quantity} 件）`}
-                  value={
-                    <span style={{ fontSize: 18, fontWeight: 700, color: "var(--color-primary-600, #2563eb)" }}>
-                      {formatCny(result.totalCost)}
-                    </span>
-                  }
-                  mono
-                />
-              </div>
-            </ReportSection>
-          </CardBody>
-        </Card>
-      </div>
-
-      <InlineNotice tone="neutral" className="mt-6">
-        成本测算报告为内部成本参考，不构成最终对客报价。
-      </InlineNotice>
-    </div>
+    </CostReportView>
   );
 }
 

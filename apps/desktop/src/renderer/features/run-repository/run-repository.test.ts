@@ -94,11 +94,12 @@ describe("applyRunEventToDetail (strict ordered event application)", () => {
     expect(withProgress.events).toHaveLength(2);
   });
 
-  it("turns ClarificationRequired into the run's clarification id", () => {
+  it("turns ClarificationRequired into the terminal CLARIFICATION_REQUIRED status", () => {
     const detail = makeDetail(makeRun({ id: "run-1", status: "RUNNING" }));
     const next = applyRunEventToDetail(detail, clarificationEvent("run-1", 1, NOW, "clar-1"));
-    expect(next.run.status).toBe("RUNNING");
+    expect(next.run.status).toBe("CLARIFICATION_REQUIRED");
     expect(next.run.clarificationRequestId).toBe("clar-1");
+    expect(next.run.completedAt).toBe(NOW);
   });
 
   it("completes a run truthfully WITHOUT a model (Phase 3 model-less COMPLETED)", () => {

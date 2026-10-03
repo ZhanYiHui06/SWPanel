@@ -27,8 +27,7 @@ export function RoutePlaceholder({ route }: RoutePlaceholderProps): React.JSX.El
           </CardHeader>
           <CardBody>
             <p className="placeholder-copy">
-              当前阶段提供稳定的 Electron、Vite、React Router 与共享设计系统集成。
-              具体页面视觉和业务交互将在后续实现中替换此占位内容。
+              该页面功能尚在建设中。
             </p>
           </CardBody>
         </Card>
