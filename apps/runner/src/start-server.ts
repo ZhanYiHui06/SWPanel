@@ -50,6 +50,7 @@ async function main() {
     const info = await server.start();
     console.log(`SWPanel Web API Server listening at http://${info.host}:${info.port}`);
     console.log(`Modeling runtime: ${runtime.reason}`);
+    if (runtime.skillPath) console.log(`Skill: ${runtime.skillName ?? ""} at ${runtime.skillPath} (${runtime.skillPathSource === "auto-detected" ? "自动检测" : "已配置"})`);
     let shuttingDown = false;
     const shutdown = () => {
       if (shuttingDown) return;

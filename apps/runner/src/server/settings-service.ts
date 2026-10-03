@@ -9,6 +9,9 @@ export interface RuntimeSettings {
   modelingConfigured: boolean;
   solidWorksVersion: string | null;
   skillName: string | null;
+  /** Absolute skill directory in use, and whether it came from configuration or auto-detection. */
+  skillPath?: string | null;
+  skillPathSource?: "configured" | "auto-detected" | null;
   baseUrl: string;
   model: string | null;
   reason: string;
