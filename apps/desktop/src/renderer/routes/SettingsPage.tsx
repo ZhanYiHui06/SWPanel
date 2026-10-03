@@ -10,7 +10,7 @@ import type { DrawingRepository } from "../features/bridge-repository/drawing-re
 import { describeError } from "../features/error-messages.js";
 import { resolveRepositoryMode } from "../features/repository-mode.js";
 import { useOptionalNotifications } from "../features/notifications/notification-context.js";
-import { httpSettings, type RuntimeSettings } from "../features/settings/http-settings.js";
+import { httpSettings, type AgentAuthMode, type AgentAuthStatus, type RuntimeSettings } from "../features/settings/http-settings.js";
 import type { SecretsStatusBridgeResult } from "../../main/bridge/bridge-contract.js";
 
 export interface SettingsPageProps {
@@ -44,6 +44,40 @@ export function SettingsPage({ drawingRepository }: SettingsPageProps): React.JS
   const [runtimeTick, setRuntimeTick] = useState(0);
   const [connected, setConnected] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  // Auth mode (API key vs. local Codex CLI login) is a Web-service setting; the
+  // legacy desktop bridge and demo mode never show it.
+  const authModeAvailable = mode === "http";
+  const [authStatus, setAuthStatus] = useState<AgentAuthStatus | null>(null);
+  const [switchingAuth, setSwitchingAuth] = useState(false);
+  const authMode: AgentAuthMode = authStatus?.authMode ?? "api_key";
+  const codexMode = authModeAvailable && authMode === "codex_cli";
+  useEffect(() => {
+    if (!authModeAvailable) return undefined;
+    let mounted = true;
+    httpSettings.getAuthStatus()
+      .then((value) => { if (mounted) setAuthStatus(value); })
+      // Older servers have no auth-mode route: keep the API-key view.
+      .catch(() => undefined);
+    return () => { mounted = false; };
+  }, [authModeAvailable, runtimeTick]);
+  async function changeAuthMode(next: AgentAuthMode): Promise<void> {
+    if (next === authMode || switchingAuth) return;
+    setSwitchingAuth(true);
+    setSecretsError(null);
+    try {
+      setAuthStatus(await httpSettings.setAuthMode(next));
+      setConnected(false);
+      notifications?.addToast?.({
+        tone: "success",
+        title: "认证方式已切换",
+        message: "已保存到服务器；重启服务后，建模 Agent 才会使用新的认证方式。"
+      });
+    } catch (caught) {
+      setSecretsError(describeError(caught).message);
+    } finally {
+      setSwitchingAuth(false);
+    }
+  }
   useEffect(() => {
     if (!live) return undefined;
     let mounted = true;
@@ -361,6 +395,8 @@ export function SettingsPage({ drawingRepository }: SettingsPageProps): React.JS
           <span className="settings-group-title">Agent / API</span>
           {!secretsAvailable ? (
             <StatusBadge variant="no-model">{mode === "mock" ? "演示数据" : "服务不可用"}</StatusBadge>
+          ) : codexMode ? (
+            authStatus?.codexLogin.loggedIn ? <StatusBadge variant="approved">已登录</StatusBadge> : <StatusBadge variant="no-model">未登录</StatusBadge>
           ) : !secretsLoaded ? (
             <StatusBadge variant="no-model">读取中</StatusBadge>
           ) : secretsStatus?.hasApiKey ? (
@@ -369,6 +405,52 @@ export function SettingsPage({ drawingRepository }: SettingsPageProps): React.JS
             <StatusBadge variant="no-model">未配置</StatusBadge>
           )}
         </div>
+        {authModeAvailable && (
+          <div className="settings-row">
+            <div className="settings-row-label">
+              <div className="settings-row-name">认证方式</div>
+              <div className="settings-row-desc">自行配置 API Key，或使用服务器上 Codex CLI 的登录（走订阅额度）</div>
+            </div>
+            <div className="settings-row-value">
+              <div role="radiogroup" aria-label="Agent 认证方式" className="flex-row-gap-3" style={{ justifyContent: "flex-end", flexWrap: "wrap" }}>
+                <label className="flex-row-gap-3">
+                  <input type="radio" name="agent-auth-mode" checked={!codexMode} disabled={switchingAuth} onChange={() => void changeAuthMode("api_key")} />
+                  使用 API Key
+                </label>
+                <label className="flex-row-gap-3">
+                  <input type="radio" name="agent-auth-mode" checked={codexMode} disabled={switchingAuth} onChange={() => void changeAuthMode("codex_cli")} />
+                  使用本机 Codex CLI 登录
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+        {codexMode && (
+          <div className="settings-row">
+            <div className="settings-row-label">
+              <div className="settings-row-name">Codex CLI 登录状态</div>
+              <div className="settings-row-desc">读取服务器 ~/.codex（或 CODEX_HOME）中的登录记录；页面不会读取或显示令牌</div>
+            </div>
+            <div className="settings-row-value">
+              {authStatus?.codexLogin.loggedIn ? (
+                <StatusBadge variant="completed">{authStatus.codexLogin.method === "chatgpt" ? "已登录（订阅账号）" : "已登录（CLI 内置 API Key）"}</StatusBadge>
+              ) : (
+                <span className="flex-row-gap-3" style={{ justifyContent: "flex-end" }}>
+                  <StatusBadge variant="no-model">未登录</StatusBadge>
+                  <span className="text-xs text-muted">请在服务器终端运行 codex login</span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+        {codexMode && (
+          <div className="settings-notice">
+            <InlineNotice tone="warning" title="将使用服务器所有者的订阅额度">
+              所有能访问此服务的人发起的建模任务，都会消耗该 Codex 账号的额度。当前服务没有登录鉴权，请仅在受信任的网络中使用。
+            </InlineNotice>
+          </div>
+        )}
+        {!codexMode && (<>
         <div className="settings-row">
           <div className="settings-row-label">
             <div className="settings-row-name">Base URL</div>
@@ -447,6 +529,7 @@ export function SettingsPage({ drawingRepository }: SettingsPageProps): React.JS
             </Button>
           </div>
         </div>
+        </>)}
         <div className="settings-row">
           <div className="settings-row-label">
             <div className="settings-row-name">Model</div>

@@ -1,8 +1,10 @@
 import { chmodSync, closeSync, existsSync, fsyncSync, lstatSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { isAgentAuthMode, readCodexLoginStatus, type AgentAuthMode, type CodexLoginStatus } from "../live-wiring/codex-login.js";
 
 export interface RuntimeSettings {
+  authMode: AgentAuthMode;
   platform: string;
   modelingConfigured: boolean;
   solidWorksVersion: string | null;
@@ -11,6 +13,7 @@ export interface RuntimeSettings {
   model: string | null;
   reason: string;
 }
+export interface AgentAuthStatus { authMode: AgentAuthMode; codexLogin: CodexLoginStatus }
 export interface ApiKeyStatus { hasApiKey: boolean; maskedApiKey: string | null }
 /** Client-correctable settings failure (bad input, missing key, upstream rejected). Maps to HTTP 400. */
 export class SettingsInputError extends Error {
@@ -31,6 +34,7 @@ type SettingsOptions = { dataRoot: string; runtime?: RuntimeSettings; env?: Node
 export class SettingsService {
   private readonly file: string;
   private key: string | null;
+  private authMode: AgentAuthMode = "api_key";
   private options: SettingsOptions;
   constructor(options: SettingsOptions) {
     this.options = options;
@@ -43,6 +47,10 @@ export class SettingsService {
       catch { throw new Error("服务器凭据文件格式无效"); }
       if (typeof stored !== "object" || stored === null || !("apiKey" in stored) || (stored.apiKey !== null && typeof stored.apiKey !== "string")) throw new Error("服务器凭据文件格式无效");
       this.key = stored.apiKey;
+      if ("authMode" in stored && stored.authMode !== undefined) {
+        if (!isAgentAuthMode(stored.authMode)) throw new Error("服务器凭据文件格式无效");
+        this.authMode = stored.authMode;
+      }
 
     } else this.key = (options.env ?? process.env).OPENAI_API_KEY?.trim() || null;
     if (this.key !== null && (this.key.length < 8 || this.key.length > 4096 || /[\r\n]/.test(this.key))) throw new Error("服务器 API Key 格式无效");
@@ -54,7 +62,7 @@ export class SettingsService {
     this.options = { ...this.options, runtime };
   }
   /** Same-directory temp file + fsync + rename + directory fsync; a crash leaves old or new content, never an empty file. */
-  private persist(value: { apiKey: string | null }): void {
+  private persist(value: { apiKey: string | null; authMode: AgentAuthMode }): void {
     const temp = `${this.file}.${randomUUID()}.tmp`;
     try {
       const fd = openSync(temp, "wx", 0o600);
@@ -78,7 +86,7 @@ export class SettingsService {
     }
   }
   getRuntime(): RuntimeSettings {
-    return this.options.runtime ?? { platform: process.platform, modelingConfigured: false, solidWorksVersion: null, skillName: null, baseUrl: (this.options.env ?? process.env).OPENAI_BASE_URL ?? "https://api.openai.com/v1", model: null, reason: "建模执行器未配置" };
+    return this.options.runtime ?? { authMode: this.authMode, platform: process.platform, modelingConfigured: false, solidWorksVersion: null, skillName: null, baseUrl: (this.options.env ?? process.env).OPENAI_BASE_URL ?? "https://api.openai.com/v1", model: null, reason: "建模执行器未配置" };
   }
   getApiKeyStatus(): ApiKeyStatus {
     return { hasApiKey: this.key !== null, maskedApiKey: this.key ? `••••${this.key.slice(-4)}` : null };
@@ -86,19 +94,38 @@ export class SettingsService {
   setApiKey(apiKey: unknown): ApiKeyStatus {
     if (typeof apiKey !== "string" || apiKey.trim().length < 8 || apiKey.length > 4096 || /[\r\n]/.test(apiKey)) throw new SettingsInputError("API Key 格式无效");
     const key = apiKey.trim();
-    this.persist({ apiKey: key });
+    this.persist({ apiKey: key, authMode: this.authMode });
     this.key = key;
     (this.options.env ?? process.env).OPENAI_API_KEY = key;
     return this.getApiKeyStatus();
   }
   clearApiKey(): ApiKeyStatus {
     // Persist an explicit null to avoid restoring an inherited environment key on restart.
-    this.persist({ apiKey: null });
+    this.persist({ apiKey: null, authMode: this.authMode });
     this.key = null;
     delete (this.options.env ?? process.env).OPENAI_API_KEY;
     return this.getApiKeyStatus();
   }
+  getAuthMode(): AgentAuthMode {
+    return this.authMode;
+  }
+  getAuthStatus(): AgentAuthStatus {
+    return { authMode: this.authMode, codexLogin: readCodexLoginStatus(this.options.env ?? process.env) };
+  }
+  /** Switches between the server API key and the local Codex CLI login; takes effect after a server restart. */
+  setAuthMode(authMode: unknown): AgentAuthStatus {
+    if (!isAgentAuthMode(authMode)) throw new SettingsInputError("认证方式无效");
+    this.persist({ apiKey: this.key, authMode });
+    this.authMode = authMode;
+    if (this.options.runtime !== undefined) this.options = { ...this.options, runtime: { ...this.options.runtime, authMode } };
+    return this.getAuthStatus();
+  }
   async testConnection(): Promise<{ connected: true }> {
+    if (this.authMode === "codex_cli") {
+      // No network call: the CLI owns the credentials, so only its login state can be checked.
+      if (!readCodexLoginStatus(this.options.env ?? process.env).loggedIn) throw new SettingsInputError("未检测到本机 Codex CLI 登录，请先在服务器上运行 codex login");
+      return { connected: true };
+    }
     if (!this.key) throw new SettingsInputError("请先保存 API Key");
     let url: URL;
     try { url = new URL(`${this.getRuntime().baseUrl.replace(/\/$/, "")}/models`); }

@@ -399,6 +399,42 @@ describe("设置", () => {
     expect(screen.queryByText("已连接")).not.toBeInTheDocument();
   });
 
+  it("lets the Web user switch between an API key and the local Codex CLI login", async () => {
+    window.history.pushState({}, "", "/?mode=http");
+    let authStatus = { authMode: "api_key", codexLogin: { loggedIn: false, method: null as string | null } };
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      let data: unknown = { hasApiKey: false, maskedApiKey: null };
+      if (path.endsWith("/runtime")) data = { platform: "darwin", modelingConfigured: false, solidWorksVersion: null, skillName: null, baseUrl: "https://api.openai.com/v1", model: null, reason: "建模执行器未配置" };
+      else if (path.endsWith("/auth-mode")) {
+        if (init?.method === "POST") authStatus = { ...authStatus, authMode: (JSON.parse(init.body as string) as { authMode: string }).authMode };
+        data = authStatus;
+      }
+      return Promise.resolve(new Response(JSON.stringify({ ok: true, data }), { status: 200 }));
+    }));
+    try {
+      const user = userEvent.setup();
+      renderSettingsWithToasts(MockRepository.create("run-running"));
+      const apiKeyOption = await screen.findByRole("radio", { name: "使用 API Key" });
+      expect(apiKeyOption).toBeChecked();
+      expect(screen.getByLabelText("新 Agent API Key")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("radio", { name: "使用本机 Codex CLI 登录" }));
+      expect(await screen.findByText("认证方式已切换")).toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: "使用本机 Codex CLI 登录" })).toBeChecked();
+      expect(screen.queryByLabelText("新 Agent API Key")).not.toBeInTheDocument();
+      expect(screen.getAllByText("未登录").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText(/codex login/)).toBeInTheDocument();
+      expect(screen.getByText("将使用服务器所有者的订阅额度")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("radio", { name: "使用 API Key" }));
+      expect(await screen.findByLabelText("新 Agent API Key")).toBeInTheDocument();
+      expect(screen.queryByText("将使用服务器所有者的订阅额度")).not.toBeInTheDocument();
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
+
   it("expands the collapsed advanced group", async () => {
     const repository = MockRepository.create("run-running");
     const user = userEvent.setup();

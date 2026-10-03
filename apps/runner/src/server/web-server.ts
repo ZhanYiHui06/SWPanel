@@ -326,7 +326,12 @@ export class WebServer {
         try {
           if (req.method === "GET" && url.pathname === "/api/settings/runtime") data = this.settings.getRuntime();
           else if (req.method === "GET" && url.pathname === "/api/settings/api-key") data = this.settings.getApiKeyStatus();
-          else if (req.method === "POST" && url.pathname === "/api/settings/api-key") {
+          else if (req.method === "GET" && url.pathname === "/api/settings/auth-mode") data = this.settings.getAuthStatus();
+          else if (req.method === "POST" && url.pathname === "/api/settings/auth-mode") {
+            const body = await this.readJson(req, 1024);
+            if (!record(body) || Object.keys(body).length !== 1 || !("authMode" in body)) throw new WebRequestError(400, "INVALID_PAYLOAD", "authMode is required");
+            data = this.settings.setAuthMode(body.authMode);
+          } else if (req.method === "POST" && url.pathname === "/api/settings/api-key") {
             const body = await this.readJson(req, 8192);
             if (!record(body) || Object.keys(body).length !== 1 || !("apiKey" in body)) throw new WebRequestError(400, "INVALID_PAYLOAD", "apiKey is required");
             data = body.apiKey === null ? this.settings.clearApiKey() : this.settings.setApiKey(body.apiKey);

@@ -1,5 +1,11 @@
 import { HttpTransport } from "../http-transport.js";
+export type AgentAuthMode = "api_key" | "codex_cli";
+export interface AgentAuthStatus {
+  authMode: AgentAuthMode;
+  codexLogin: { loggedIn: boolean; method: "chatgpt" | "api_key" | null };
+}
 export interface RuntimeSettings {
+  authMode?: AgentAuthMode;
   platform: string;
   modelingConfigured: boolean;
   solidWorksVersion: string | null;
@@ -36,5 +42,7 @@ export const httpSettings = {
   getStatus: async () => ({ ok: true as const, data: await get<ApiKeyStatus>("/api/settings/api-key") }),
   setApiKey: async (apiKey: string) => ({ ok: true as const, data: await transport().post<ApiKeyStatus>("/api/settings/api-key", { apiKey }) }),
   clearApiKey: async () => ({ ok: true as const, data: await transport().post<ApiKeyStatus>("/api/settings/api-key", { apiKey: null }) }),
+  getAuthStatus: () => get<AgentAuthStatus>("/api/settings/auth-mode"),
+  setAuthMode: (authMode: AgentAuthMode) => transport().post<AgentAuthStatus>("/api/settings/auth-mode", { authMode }),
   testConnection: () => transport().post<{ connected: true }>("/api/settings/test-connection", {})
 };

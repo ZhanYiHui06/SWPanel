@@ -37,7 +37,7 @@ async function main() {
   try {
     // Credentials are loaded once, before spawning any Codex child; the runtime description is attached afterwards.
     const settingsService = new SettingsService({ dataRoot });
-    const { runnerConfig, runtime } = await configureWebRuntime();
+    const { runnerConfig, runtime } = await configureWebRuntime(process.env, process.platform, settingsService.getAuthMode());
     settingsService.setRuntime(runtime);
     const allowedHosts = parseList(process.env.SWPANEL_ALLOWED_HOSTS);
     const allowedOrigins = parseList(process.env.SWPANEL_ALLOWED_ORIGINS);

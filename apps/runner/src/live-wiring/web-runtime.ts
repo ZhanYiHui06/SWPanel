@@ -3,17 +3,18 @@ import { codexVersionProbe, hashSkillDirectory, PreflightGate, probeLiveCodexRun
 import { resolveLiveCodexConfig } from "./live-codex-config.js";
 import { buildLiveCodexAgentWiring } from "./live-codex-wiring.js";
 import { resolveWebCodexProvider, webCodexTransportFactory } from "./web-codex-provider.js";
+import type { AgentAuthMode } from "./codex-login.js";
 import type { RuntimeSettings } from "../server/settings-service.js";
 
 /** Server environment is the only source of executable/skill configuration. No model turn runs during discovery. */
-export async function configureWebRuntime(env: NodeJS.ProcessEnv = process.env, platform: string = process.platform): Promise<{ runnerConfig?: RunnerConfig; runtime: RuntimeSettings }> {
+export async function configureWebRuntime(env: NodeJS.ProcessEnv = process.env, platform: string = process.platform, authMode: AgentAuthMode = "api_key"): Promise<{ runnerConfig?: RunnerConfig; runtime: RuntimeSettings }> {
   const config = resolveLiveCodexConfig(env, { isPackaged: false });
-  const provider = resolveWebCodexProvider(config.executable, env);
-  const runtime: RuntimeSettings = { platform, modelingConfigured: false, solidWorksVersion: null, skillName: null, baseUrl: provider.baseUrl, model: provider.model, reason: "建模执行器未配置" };
+  const provider = resolveWebCodexProvider(config.executable, env, authMode);
+  const runtime: RuntimeSettings = { authMode, platform, modelingConfigured: false, solidWorksVersion: null, skillName: null, baseUrl: provider.baseUrl, model: provider.model, reason: "建模执行器未配置" };
   if (!config.enabled) return { runtime };
   runtime.skillName = config.skillName;
   if (platform !== "win32") { runtime.reason = "自动建模需要 Windows 和 SolidWorks；当前平台不支持"; return { runtime }; }
-  if (!provider.childOptions) { runtime.reason = "服务器 API Key 未配置，建模执行器未启用"; return { runtime }; }
+  if (!provider.childOptions) { runtime.reason = authMode === "codex_cli" ? "未检测到本机 Codex CLI 登录（请先在服务器上运行 codex login），建模执行器未启用" : "服务器 API Key 未配置，建模执行器未启用"; return { runtime }; }
   const transportFactory = webCodexTransportFactory(provider);
   const solidworks = await probeSolidWorksRuntime();
   runtime.solidWorksVersion = solidworks.version;

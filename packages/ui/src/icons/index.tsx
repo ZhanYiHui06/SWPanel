@@ -171,14 +171,14 @@ export const PlayIcon = createIcon(
 /** Upload — arrow into tray */
 export const UploadIcon = createIcon(
   <>
-    <path {...S} d="M7 1v8m0 0l-3-3m3 3l3-3M1 13h12" />
+    <path {...S} d="M8 10V2m0 0L5 5m3-3l3 3M2 13.5h12" />
   </>
 );
 
 /** Download — arrow out of tray */
 export const DownloadIcon = createIcon(
   <>
-    <path {...S} d="M8 15V7m0 0L5 10m3-3l3 3M1 13h12" />
+    <path {...S} d="M8 2v8m0 0L5 7m3 3l3-3M2 13.5h12" />
   </>
 );
 

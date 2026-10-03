@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createServer, request as httpRequest } from "node:http";
-import { chmodSync, existsSync, readdirSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DeletionImpact, DrawingDetailView } from "@swpanel/contracts";
 import { SettingsService } from "./settings-service.js";
@@ -104,6 +105,20 @@ describe("WebServer real HTTP business transport", () => {
     expect((await post("/api/settings/api-key", { apiKey: null })).json.data).toEqual({ hasApiKey: false, maskedApiKey: null });
     expect((await post("/api/settings/test-connection", {})).json.ok).toBe(false);
     expect(calls).toBe(1);
+  });
+
+  it("switches the agent auth mode over HTTP and rejects invalid modes", async () => {
+    await server.stop();
+    const codexHome = mkdtempSync(join(tmpdir(), "swpanel-route-codex-"));
+    try {
+      await start({ settingsService: new SettingsService({ dataRoot, env: { CODEX_HOME: codexHome } }) });
+      const initial = await (await fetch(`${baseUrl}/api/settings/auth-mode`)).json() as { data: unknown };
+      expect(initial.data).toEqual({ authMode: "api_key", codexLogin: { loggedIn: false, method: null } });
+      expect((await post("/api/settings/auth-mode", { authMode: "codex_cli" })).json.data).toMatchObject({ authMode: "codex_cli" });
+      expect((await post("/api/settings/auth-mode", { authMode: "nope" })).json.ok).toBe(false);
+      expect((await post("/api/settings/auth-mode", {})).json.ok).toBe(false);
+      expect((await post("/api/settings/test-connection", {})).json.ok).toBe(false);
+    } finally { rmSync(codexHome, { recursive: true, force: true }); }
   });
 
   it("reports server identity and unconfigured modeling truthfully", async () => {

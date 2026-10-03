@@ -58,7 +58,7 @@ describe("server credentials", () => {
   });
   it("accepts a runtime description after construction without re-reading credentials", () => {
     const service = new SettingsService({ dataRoot: root(), env: {} });
-    const runtime = { platform: "win32", modelingConfigured: true, solidWorksVersion: "2024", skillName: "skill", baseUrl: "https://example.test/v1", model: "m", reason: "ok" };
+    const runtime = { authMode: "api_key" as const, platform: "win32", modelingConfigured: true, solidWorksVersion: "2024", skillName: "skill", baseUrl: "https://example.test/v1", model: "m", reason: "ok" };
     service.setRuntime(runtime);
     expect(service.getRuntime()).toEqual(runtime);
   });
@@ -67,5 +67,39 @@ describe("server credentials", () => {
     const service = new SettingsService({ dataRoot, env: {} });
     service.setApiKey("sk-private-1234");
     expect(readdirSync(dataRoot)).toEqual(["secrets.env"]);
+  });
+  it("persists the auth mode next to the key, defaults to api_key and survives clearing the key", () => {
+    const dataRoot = root();
+    const service = new SettingsService({ dataRoot, env: {} });
+    expect(service.getAuthMode()).toBe("api_key");
+    service.setApiKey("sk-sensitive-1234");
+    expect(service.setAuthMode("codex_cli").authMode).toBe("codex_cli");
+    expect(new SettingsService({ dataRoot, env: {} }).getAuthMode()).toBe("codex_cli");
+    expect(new SettingsService({ dataRoot, env: {} }).getApiKeyStatus().maskedApiKey).toBe("••••1234");
+    service.clearApiKey();
+    expect(new SettingsService({ dataRoot, env: {} }).getAuthMode()).toBe("codex_cli");
+    expect(() => service.setAuthMode("bogus")).toThrow(SettingsInputError);
+    expect(service.getRuntime().authMode).toBe("codex_cli");
+  });
+  it("reads credential files written before auth modes existed as api_key", () => {
+    const dataRoot = root();
+    writeFileSync(join(dataRoot, "secrets.env"), JSON.stringify({ apiKey: "sk-legacy-1234" }));
+    const service = new SettingsService({ dataRoot, env: {} });
+    expect(service.getAuthMode()).toBe("api_key");
+    expect(service.getApiKeyStatus().hasApiKey).toBe(true);
+    writeFileSync(join(dataRoot, "secrets.env"), JSON.stringify({ apiKey: null, authMode: "weird" }));
+    expect(() => new SettingsService({ dataRoot, env: {} })).toThrow("服务器凭据文件格式无效");
+  });
+  it("tests the Codex CLI login without any network request in codex_cli mode", async () => {
+    const dataRoot = root();
+    const codexHome = root();
+    const fetcher = vi.fn<typeof fetch>();
+    const service = new SettingsService({ dataRoot, env: { CODEX_HOME: codexHome }, fetch: fetcher });
+    service.setAuthMode("codex_cli");
+    await expect(service.testConnection()).rejects.toThrow("codex login");
+    writeFileSync(join(codexHome, "auth.json"), JSON.stringify({ tokens: { access_token: "t" } }));
+    expect(service.getAuthStatus()).toEqual({ authMode: "codex_cli", codexLogin: { loggedIn: true, method: "chatgpt" } });
+    await expect(service.testConnection()).resolves.toEqual({ connected: true });
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });
