@@ -52,6 +52,14 @@ jobs:
       - run: npm run make:win
       - name: Packaged app smoke test
         run: npx playwright test --config=playwright.electron.production.config.ts
+      - name: Print failure page snapshots
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse test-results -Filter error-context.md -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "=== $($_.FullName)"
+            Get-Content $_.FullName -TotalCount 80
+          }
       - name: Upload installers
         if: always()
         uses: actions/upload-artifact@v4
@@ -66,5 +74,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-production
-          path: playwright-report-production/
+          path: |
+            playwright-report-production/
+            test-results/
           if-no-files-found: ignore
