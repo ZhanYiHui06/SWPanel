@@ -1093,7 +1093,11 @@ test("missing stored source file shows a structured UI error without crashing", 
       const page = await second.firstWindow();
       await page.waitForLoadState("domcontentloaded");
       await goToHash(page, "/drawings");
-      await expect(page.getByText("图纸库加载失败")).toBeVisible();
+      // The list is metadata-only and keeps working; the damaged source file is
+      // reported where it is actually read: the drawing detail.
+      await expect(page.getByRole("link", { name: "打开图纸 PDJF003.01" })).toBeVisible();
+      await page.getByRole("link", { name: "打开图纸 PDJF003.01" }).click();
+      await expect(page.getByText("图纸详情加载失败")).toBeVisible();
       await expect(page.getByText("文件缺失，无法读取，请联系管理员")).toBeVisible();
       // The raw code lives in the collapsed technical details.
       await page.getByText("技术详情").first().click();
