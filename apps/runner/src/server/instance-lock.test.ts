@@ -11,8 +11,8 @@ afterEach(() => { for (const path of roots.splice(0)) rmSync(path, { recursive: 
 describe("data root single-instance lock", () => {
   it("rejects a second holder while the owner is alive and releases idempotently", () => {
     const dataRoot = root();
-    // Pid 1 (init) is alive and not this process, standing in for another running server.
-    writeFileSync(join(dataRoot, "server.lock"), JSON.stringify({ pid: 1 }));
+    // The parent process is alive and not this process, standing in for another running server.
+    writeFileSync(join(dataRoot, "server.lock"), JSON.stringify({ pid: process.ppid }));
     expect(() => acquireDataRootLock(dataRoot)).toThrow(DataRootLockedError);
   });
   it("acquires, blocks nothing after release, and can be re-acquired", () => {

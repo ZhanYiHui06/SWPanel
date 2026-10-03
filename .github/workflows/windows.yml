@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  # Renderer fixtures format dates in the product's time zone.
+  TZ: Asia/Shanghai
+
 concurrency:
   group: windows-${{ github.ref }}
   cancel-in-progress: true
@@ -21,6 +25,10 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pypdfium2==4.30.0 Pillow==11.3.0
       - run: npm ci
       - run: npm run build:packages
       - run: npm run typecheck

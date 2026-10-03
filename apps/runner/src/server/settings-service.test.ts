@@ -13,7 +13,8 @@ describe("server credentials", () => {
     const service = new SettingsService({ dataRoot, env });
     expect(service.getApiKeyStatus().hasApiKey).toBe(false);
     expect(service.setApiKey("sk-sensitive-1234")).toEqual({ hasApiKey: true, maskedApiKey: "••••1234" });
-    expect(statSync(join(dataRoot, "secrets.env")).mode & 0o777).toBe(0o600);
+    // POSIX permission bits do not exist on Windows (the file lives under the user profile ACL).
+    if (process.platform !== "win32") expect(statSync(join(dataRoot, "secrets.env")).mode & 0o777).toBe(0o600);
     expect(readFileSync(join(dataRoot, "secrets.env"), "utf8")).toContain("sk-sensitive-1234");
     expect(new SettingsService({ dataRoot, env: {} }).getApiKeyStatus().maskedApiKey).toBe("••••1234");
     service.clearApiKey();

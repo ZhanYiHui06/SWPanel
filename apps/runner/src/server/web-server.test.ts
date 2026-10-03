@@ -148,7 +148,8 @@ describe("WebServer real HTTP business transport", () => {
     expect((await command("drawing.create", { ...payload, drawingNumber: "CORRECTED" }, "retry")).ok).toBe(true);
   });
 
-  it("keeps successful imports replayable when temporary cleanup is unavailable", async () => {
+  // Simulates cleanup failure with chmod 0o500, which has no effect on Windows.
+  it.skipIf(process.platform === "win32")("keeps successful imports replayable when temporary cleanup is unavailable", async () => {
     const file = await upload();
     const uploadRoot = Reflect.get(server, "uploadRoot") as string;
     const temporaryPath = join(uploadRoot, `${file.token}.pdf`);
