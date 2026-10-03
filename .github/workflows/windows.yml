@@ -78,3 +78,27 @@ jobs:
             playwright-report-production/
             test-results/
           if-no-files-found: ignore
+
+  portable:
+    name: Portable zip (Node + Python bundled)
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:web
+      - name: Assemble portable package
+        run: node scripts/build-portable.mjs
+      - name: Smoke test the assembled package with its own Node and Python
+        run: node scripts/portable-smoke.mjs portable/SWPanel
+      - name: Upload portable zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: swpanel-windows-portable
+          path: portable/SWPanel-win-x64-*.zip
+          if-no-files-found: error

@@ -24,9 +24,11 @@ function defaultBundledRoot(): string {
 }
 
 /**
- * Skill roots searched in priority order: the repository's bundled skills
- * (matches the product version), the project-level `.agents/skills`, then the
- * per-user folders used by Codex and other coding agents.
+ * Skill roots searched in priority order: the project-level `.agents/skills`,
+ * the per-user folders used by Codex and other coding agents, and last the
+ * skills bundled with this checkout. Codex only lists skills from its own
+ * folders and the runtime verifies the exact listed path, so a copy that Codex
+ * scans must win over the bundled one (which then needs to be installed).
  */
 export function skillSearchRoots(options: SkillSearchOptions = {}): string[] {
   const env = options.env ?? process.env;
@@ -34,7 +36,6 @@ export function skillSearchRoots(options: SkillSearchOptions = {}): string[] {
   const cwd = options.cwd ?? process.cwd();
   const bundled = options.bundledRoot === undefined ? defaultBundledRoot() : options.bundledRoot;
   const roots = [
-    ...(bundled === null ? [] : [bundled]),
     join(cwd, ".agents", "skills"),
     ...(env.CODEX_HOME?.trim() ? [join(env.CODEX_HOME.trim(), "skills")] : []),
     join(home, ".codex", "skills"),
@@ -43,7 +44,8 @@ export function skillSearchRoots(options: SkillSearchOptions = {}): string[] {
     join(home, ".cursor", "skills"),
     join(home, ".gemini", "skills"),
     join(home, ".config", "opencode", "skills"),
-    join(home, ".config", "agents", "skills")
+    join(home, ".config", "agents", "skills"),
+    ...(bundled === null ? [] : [bundled])
   ];
   return [...new Set(roots)];
 }

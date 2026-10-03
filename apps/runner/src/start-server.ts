@@ -3,6 +3,7 @@ import { acquireDataRootLock } from "./server/instance-lock.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { SettingsService } from "./server/settings-service.js";
 import { configureWebRuntime } from "./live-wiring/web-runtime.js";
 
@@ -39,16 +40,21 @@ async function main() {
     const settingsService = new SettingsService({ dataRoot });
     const { runnerConfig, runtime } = await configureWebRuntime(process.env, process.platform, settingsService.getAuthMode());
     settingsService.setRuntime(runtime);
+    // The built web UI (apps/desktop/dist/renderer) is served from the same port when present.
+    const configuredWebRoot = process.env.SWPANEL_WEB_ROOT?.trim();
+    const webRoot = [configuredWebRoot, fileURLToPath(new URL("../../desktop/dist/renderer", import.meta.url))].find((candidate): candidate is string => candidate !== undefined && candidate !== "" && existsSync(join(candidate, "index.html"))) ?? null;
     const allowedHosts = parseList(process.env.SWPANEL_ALLOWED_HOSTS);
     const allowedOrigins = parseList(process.env.SWPANEL_ALLOWED_ORIGINS);
     const server = new WebServer({
       port, host, dataRoot, settingsService,
+      ...(webRoot !== null ? { webRoot } : {}),
       ...(allowedHosts.length > 0 ? { allowedHosts } : {}),
       ...(allowedOrigins.length > 0 ? { allowedOrigins } : {}),
       ...(runnerConfig ? { runnerConfig } : {})
     });
     const info = await server.start();
     console.log(`SWPanel Web API Server listening at http://${info.host}:${info.port}`);
+    console.log(webRoot === null ? "Web UI: 未找到前端构建产物（仅提供 /api）" : `Web UI: http://${info.host}:${info.port}/`);
     console.log(`Modeling runtime: ${runtime.reason}`);
     if (runtime.skillPath) console.log(`Skill: ${runtime.skillName ?? ""} at ${runtime.skillPath} (${runtime.skillPathSource === "auto-detected" ? "自动检测" : "已配置"})`);
     let shuttingDown = false;

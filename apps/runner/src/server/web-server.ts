@@ -15,6 +15,7 @@ import { Runner, DEFAULT_RUN_PROFILE, type RunnerConfig } from "../runner.js";
 import { RunnerRequestHandler } from "../ipc/request-handler.js";
 import { RunnerError } from "../errors.js";
 import { SettingsInputError, SettingsService } from "./settings-service.js";
+import { serveStaticFile } from "./static-files.js";
 import { toPublicError } from "./public-errors.js";
 import { handleFileRequest } from "./file-routes.js";
 
@@ -64,6 +65,8 @@ export interface WebServerOptions {
   maxRequestBytes?: number;
   uploadTokenTtlMs?: number;
   settingsService?: SettingsService;
+  /** Directory of the built renderer; when set the server also serves the web UI (single-port delivery). */
+  webRoot?: string;
   /** Extra Host header names (hostname or hostname:port) accepted besides loopback and `host`. */
   allowedHosts?: readonly string[];
   /** Concurrent /api/upload requests (default 3) and total staged bytes (default 200 MiB). */
@@ -321,6 +324,7 @@ export class WebServer {
       try { url = new URL(req.url ?? "/", "http://127.0.0.1"); }
       catch { throw new WebRequestError(400, "INVALID_REQUEST", "请求地址格式无效"); }
       if (handleFileRequest(this.runner, req, res, url)) return;
+      if (this.options.webRoot !== undefined && !url.pathname.startsWith("/api/") && serveStaticFile(this.options.webRoot, req, res, url.pathname)) return;
       if (url.pathname.startsWith("/api/settings/")) {
         let data: unknown;
         try {

@@ -19,6 +19,9 @@ playwright-report-production/
 apps/desktop/.vite/
 *.tsbuildinfo
 
+# Windows portable package staging
+/portable/
+
 # Packaging staging snapshots and temporary verification artifacts.
 # Never reuse or ship these; package:win rebuilds the root package fresh.
 .package-copy/

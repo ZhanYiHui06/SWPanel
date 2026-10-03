@@ -23,14 +23,14 @@ describe("skill discovery", () => {
       expect(found?.path).toBe(expected);
     }
   });
-  it("prefers the bundled skill, then the project folder, then user folders", () => {
+  it("prefers the project folder, then user folders, and uses the bundled copy only as a last resort", () => {
     const home = temp(); const cwd = temp(); const bundled = temp();
-    const userCopy = install(join(home, ".codex", "skills"), "solidworks-autobuild");
-    const projectCopy = install(join(cwd, ".agents", "skills"), "solidworks-autobuild");
-    expect(discoverSkill("solidworks-autobuild", { env: {}, homeDir: home, cwd, bundledRoot: bundled })?.path).toBe(projectCopy);
     const bundledCopy = install(bundled, "solidworks-autobuild");
     expect(discoverSkill("solidworks-autobuild", { env: {}, homeDir: home, cwd, bundledRoot: bundled })?.path).toBe(bundledCopy);
-    expect(userCopy).not.toBe(bundledCopy);
+    const userCopy = install(join(home, ".agents", "skills"), "solidworks-autobuild");
+    expect(discoverSkill("solidworks-autobuild", { env: {}, homeDir: home, cwd, bundledRoot: bundled })?.path).toBe(userCopy);
+    const projectCopy = install(join(cwd, ".agents", "skills"), "solidworks-autobuild");
+    expect(discoverSkill("solidworks-autobuild", { env: {}, homeDir: home, cwd, bundledRoot: bundled })?.path).toBe(projectCopy);
   });
   it("honours CODEX_HOME and follows symlinked skill folders", () => {
     const home = temp(); const codexHome = temp(); const real = temp();
