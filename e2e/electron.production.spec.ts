@@ -15,6 +15,7 @@ import {
   FAKE_EXECUTOR_STEP_DELAY_ENV,
   RUN_LEASE_ENV
 } from "../apps/desktop/src/main/runner-host/test-executor-config.js";
+import { registerGeometryFixture } from "../apps/runner/src/testing/measured-geometry-fixture.js";
 import { PRODUCT_ROUTES } from "../apps/desktop/src/renderer/app/route-manifest.js";
 import type { RunDetailBridgeResult, SwpanelBridgeApi } from "../apps/desktop/src/main/bridge/bridge-contract.js";
 import {
@@ -1093,6 +1094,9 @@ test("missing stored source file shows a structured UI error without crashing", 
       await page.waitForLoadState("domcontentloaded");
       await goToHash(page, "/drawings");
       await expect(page.getByText("图纸库加载失败")).toBeVisible();
+      await expect(page.getByText("文件缺失，无法读取，请联系管理员")).toBeVisible();
+      // The raw code lives in the collapsed technical details.
+      await page.getByText("技术详情").first().click();
       await expect(page.getByText("LEDGER_FILE_MISSING")).toBeVisible();
       await expect(page.locator("#root")).not.toBeEmpty();
     } finally {
@@ -1722,6 +1726,10 @@ test.describe("Phase 3 Run orchestration through the real Runner + Fake Executor
         });
         expect(initialCostData.ok).toBe(true);
         expect(initialCostData.data.materials.length).toBeGreaterThanOrEqual(1);
+
+        // The fake executor produces no measured geometry; register the test-only
+        // measured-log fixture so the cost report can use a verified volume.
+        registerGeometryFixture(root, modelId);
 
         // 2. Generate Q01 cost report for approved model
         const q01Created = await page.evaluate(
