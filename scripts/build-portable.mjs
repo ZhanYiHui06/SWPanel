@@ -6,7 +6,7 @@
 // Prerequisite: `npm run build:web` (packages + web renderer). `--skip-runtime`
 // leaves out the downloaded Node/Python (layout dry-run on any OS).
 import { spawnSync } from "node:child_process";
-import { cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -83,7 +83,9 @@ await cp(path.join(repo, "skills/solidworks-autobuild"), path.join(app, "skills/
 });
 await writeFile(path.join(app, "skills/solidworks-autobuild/.swpanel-bundle-id"), `${id}\n`);
 
-await cp(path.join(repo, "scripts/portable/start.bat"), path.join(root, "start.bat"));
+// cmd.exe needs CRLF line endings for labels/goto to work reliably.
+const startBat = (await readFile(path.join(repo, "scripts/portable/start.bat"), "utf8")).replace(/\r?\n/g, "\r\n");
+await writeFile(path.join(root, "start.bat"), startBat);
 await cp(path.join(repo, "scripts/portable/README-WINDOWS.txt"), path.join(root, "README-WINDOWS.txt"));
 await writeFile(path.join(root, "VERSION.txt"), `commit ${id}\nnode ${process.version}\npython ${PYTHON_VERSION}\n`);
 

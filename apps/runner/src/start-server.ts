@@ -38,6 +38,7 @@ async function main() {
   try {
     // Credentials are loaded once, before spawning any Codex child; the runtime description is attached afterwards.
     const settingsService = new SettingsService({ dataRoot });
+    console.log("正在检测建模环境（SolidWorks 检测最长约 1 分钟，完成后开始提供服务）...");
     const { runnerConfig, runtime } = await configureWebRuntime(process.env, process.platform, settingsService.getAuthMode());
     settingsService.setRuntime(runtime);
     // The built web UI (apps/desktop/dist/renderer) is served from the same port when present.

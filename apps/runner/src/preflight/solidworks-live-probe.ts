@@ -1296,8 +1296,11 @@ while True:
         # ATTACH-ONLY: GetActiveObject never creates an instance — it resolves
         # the already-running object in the ROT (or raises when none exists).
         sw = win32com.client.GetActiveObject("SldWorks.Application")
-        com_pid = int(sw.GetProcessID())
-        revision = str(sw.RevisionNumber())
+        # Depending on the generated typelib wrapper these are methods or plain properties.
+        _pid = sw.GetProcessID
+        _rev = sw.RevisionNumber
+        com_pid = int(_pid() if callable(_pid) else _pid)
+        revision = str(_rev() if callable(_rev) else _rev)
         attached = True
         if mode == "spawn" and com_pid != expected_pid:
             foreign = True
