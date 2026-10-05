@@ -70,7 +70,7 @@ import { join } from "node:path";
 
 import type { PreflightCapability } from "@swpanel/domain";
 
-import { CODEX_CLI_VERSION, CODEX_PROTOCOL_VERSION } from "../agent/codex/builders.js";
+import { CODEX_PROTOCOL_VERSION } from "../agent/codex/builders.js";
 import { InvalidArgumentError } from "../errors.js";
 import type { LiveCodexProbeResult } from "./codex-live-probe.js";
 import { hashSkillDirectory } from "./skill-directory-hash.js";
@@ -242,9 +242,9 @@ export interface RealPreflightProbeOptions {
    */
   runtime?: RuntimeProbe;
   /**
-   * The pinned runtime version the gate requires. Defaults to the pinned
-   * codex-cli release `0.147.0` (`CODEX_CLI_VERSION`) — the version check is
-   * an EXACT pin, never a ">= some version" guess.
+   * Optional exact runtime version pin. When omitted (the default) any Codex
+   * CLI version is accepted: compatibility is proven by the live app-server
+   * protocol handshake, skill discovery and the protocol pin, not the version.
    */
   expectedRuntimeVersion?: string;
   /**
@@ -287,7 +287,7 @@ export class RealPreflightProbe {
   readonly synthetic = false;
 
   private readonly skillRootPath: string;
-  private readonly expectedRuntimeVersion: string;
+  private readonly expectedRuntimeVersion: string | undefined;
   private readonly expectedProtocolVersion: string;
   private readonly modelImageInputSupportedConfig: boolean | undefined;
   private readonly runtimeResult: RuntimeProbeResult;
@@ -299,7 +299,7 @@ export class RealPreflightProbe {
       throw new InvalidArgumentError("skillRootPath must be a non-empty absolute path");
     }
     this.skillRootPath = options.skillRootPath;
-    this.expectedRuntimeVersion = options.expectedRuntimeVersion ?? CODEX_CLI_VERSION;
+    this.expectedRuntimeVersion = options.expectedRuntimeVersion;
     this.expectedProtocolVersion = options.expectedProtocolVersion ?? CODEX_PROTOCOL_VERSION;
     this.modelImageInputSupportedConfig = options.modelImageInputSupported;
     this.liveCodex = options.liveCodex;
@@ -337,12 +337,14 @@ export class RealPreflightProbe {
           ? this.runtimeResult.available
           : this.liveCodex.available;
       case "agent_runtime_version_supported":
-        // Exact pin: the reported version MUST equal the expected one.
+        // No pin configured: any version passes once the runtime is available.
         return this.liveCodex === undefined
           ? this.runtimeResult.available &&
-              this.runtimeResult.version === this.expectedRuntimeVersion
+              (this.expectedRuntimeVersion === undefined ||
+                this.runtimeResult.version === this.expectedRuntimeVersion)
           : this.liveCodex.available &&
-              this.liveCodex.version === this.expectedRuntimeVersion;
+              (this.expectedRuntimeVersion === undefined ||
+                this.liveCodex.version === this.expectedRuntimeVersion);
       case "agent_model_supports_image":
         // Explicit live configuration is authoritative; otherwise the live
         // snapshot's, then the seam's verifiable report; an unverifiable

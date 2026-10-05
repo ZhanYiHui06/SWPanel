@@ -131,11 +131,19 @@ describe("RealPreflightProbe (Batch D real probe, hermetic seams)", () => {
       const probe = new RealPreflightProbe({
         skillRootPath: skill.dir,
         runtime: runtimeOf({ version: "0.148.0" }),
-        solidworks: solidworksOf()
+        solidworks: solidworksOf(),
+        expectedRuntimeVersion: "0.147.0"
       });
       const results = checkAll(probe, probeContext(frozenIdentity(skill), workspace));
       expect(results.get("agent_runtime_available")).toBe(true);
       expect(results.get("agent_runtime_version_supported")).toBe(false);
+      // Without an explicit pin any version is accepted.
+      const unpinned = new RealPreflightProbe({
+        skillRootPath: skill.dir,
+        runtime: runtimeOf({ version: "0.148.0" }),
+        solidworks: solidworksOf()
+      });
+      expect(checkAll(unpinned, probeContext(frozenIdentity(skill), workspace)).get("agent_runtime_version_supported")).toBe(true);
     } finally {
       removeTempDir(workspace);
       closeSkill(skill);
@@ -508,7 +516,8 @@ describe("RealPreflightProbe (Batch D real probe, hermetic seams)", () => {
         new RealPreflightProbe({
           skillRootPath: skill.dir,
           runtime: runtimeOf({ version: "0.148.0" }),
-          solidworks: solidworksOf()
+          solidworks: solidworksOf(),
+          expectedRuntimeVersion: "0.147.0"
         })
       );
       const result = gate.run({ skill: frozenIdentity(skill), workspaceRoot: workspace });
@@ -651,7 +660,8 @@ describe("RealPreflightProbe with a live Codex snapshot (liveCodex seam)", () =>
       const probe = new RealPreflightProbe({
         skillRootPath: skill.dir,
         runtime: runtimeOf({ version: "0.147.0" }), // seam says pinned; live says otherwise
-        liveCodex: liveSnapshot({ version: "0.148.0" })
+        liveCodex: liveSnapshot({ version: "0.148.0" }),
+        expectedRuntimeVersion: "0.147.0"
       });
       const results = checkAll(probe, probeContext(frozenIdentity(skill), workspace));
       expect(results.get("agent_runtime_available")).toBe(true);

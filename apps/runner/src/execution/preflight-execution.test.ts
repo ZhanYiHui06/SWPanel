@@ -704,6 +704,7 @@ describe("Phase 5 Batch D real preflight gate at PREPARING (RealPreflightProbe)"
     return new PreflightGate(
       new RealPreflightProbe({
         skillRootPath: skillDir,
+        expectedRuntimeVersion: "0.147.0",
         runtime: {
           probe: () => ({
             available: true,
