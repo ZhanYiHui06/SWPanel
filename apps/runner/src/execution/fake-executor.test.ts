@@ -4065,8 +4065,8 @@ describe("FakeExecutor result phase with the Codex turn adapter (P5-3)", () => {
       protocol: delegate.protocol,
       protocolVersion: delegate.protocolVersion,
       threadIdFor: (runId) => delegate.threadIdFor(runId),
-      async runTurn(): Promise<AgentTurnOutcome> {
-        throw new AgentTurnError("AGENT_RUNTIME_UNAVAILABLE", "turn failed", "model not supported");
+      runTurn(): Promise<AgentTurnOutcome> {
+        return Promise.reject(new AgentTurnError("AGENT_RUNTIME_UNAVAILABLE", "turn failed", "model not supported"));
       }
     };
     const fixture = openExecFixture("exec-live-agent-progress", {
