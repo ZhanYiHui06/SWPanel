@@ -357,6 +357,9 @@ const STAGE_ACTIVITIES: Readonly<Record<RunStage, string>> = {
   PACKAGING: "生成结果"
 };
 
+/** Shown while a real agent turn runs (no fake per-stage progress is published meanwhile). */
+const LIVE_AGENT_ACTIVITY = "Codex 正在分析图纸并建模，可能需要几分钟";
+
 /** The six user-visible stages walked in order by the success path. */
 const ALL_STAGES: readonly RunStage[] = [
   "PREPARING",
@@ -455,6 +458,14 @@ export class FakeExecutor {
   private readonly now: () => Date;
   private readonly agent: AgentTurnAdapter;
   private readonly ownsAgent: boolean;
+  /**
+   * True when a REAL agent (explicitly handed over, e.g. live Codex) does the
+   * work. The scripted stage walk would then announce every stage — and 100%
+   * progress — before the agent has done anything, so only the genuine local
+   * preparation step is announced and the agent turn runs behind an honest
+   * "in progress" activity.
+   */
+  private readonly liveAgent: boolean;
   private readonly skillResolvedPath: string;
   private readonly artifactValidator: ArtifactValidator;
   private readonly expectedSolidWorksVersion: string;
@@ -508,6 +519,7 @@ export class FakeExecutor {
     // EXPLICITLY handed over; a caller-injected adapter without `ownsAgent`
     // stays caller-owned so it can be reused across Runner open/close cycles.
     this.ownsAgent = options.ownsAgent === true || options.agent === undefined;
+    this.liveAgent = options.ownsAgent === true && options.agent !== undefined;
     this.skillResolvedPath = options.skillResolvedPath ?? "";
     this.expectedSolidWorksVersion = options.expectedSolidWorksVersion ?? "";
     // The independent validator reads the attempt workspace through the same
@@ -1223,7 +1235,29 @@ export class FakeExecutor {
     switch (this.scenario) {
       case "success":
       case "cooperative-cancel": {
-        await this.walkStages(attempt, token, ALL_STAGES, { writeResult: true }, resumed, layout);
+        if (this.liveAgent) {
+          await this.walkStages(
+            attempt,
+            token,
+            ["PREPARING"],
+            { progressTotal: ALL_STAGES.length },
+            resumed,
+            layout
+          );
+          if (token.requested) return;
+          this.runs.appendRunEvents({
+            runId: attempt.runId,
+            attemptId: attempt.id,
+            entries: [
+              {
+                payload: { type: "ActivityUpdated", activity: LIVE_AGENT_ACTIVITY },
+                occurredAt: this.nowIso()
+              }
+            ]
+          });
+        } else {
+          await this.walkStages(attempt, token, ALL_STAGES, { writeResult: true }, resumed, layout);
+        }
         if (token.requested) return; // cooperative stop: the cancel flow finishes the attempt
         await this.finalizeWithAgentResults(attempt, undefined, token, layout, resumed);
         return;
@@ -1386,7 +1420,7 @@ export class FakeExecutor {
     attempt: RunAttempt,
     token: CancelToken,
     stages: readonly RunStage[],
-    opts: { writeResult?: boolean; writeMarker?: boolean; interruptAfter?: RunStage },
+    opts: { writeResult?: boolean; writeMarker?: boolean; interruptAfter?: RunStage; progressTotal?: number },
     resumed: boolean,
     layout: RunWorkspaceLayout
   ): Promise<void> {
@@ -1402,7 +1436,7 @@ export class FakeExecutor {
       if (token.requested) return;
       const stage = stages[index];
       if (stage === undefined) return; // unreachable inside the bounds; satisfies strict indexing
-      const progressPercent = Math.round(((index + 1) / stages.length) * 100);
+      const progressPercent = Math.round(((index + 1) / (opts.progressTotal ?? stages.length)) * 100);
       this.runs.appendRunEvents({
         runId: attempt.runId,
         attemptId: attempt.id,
@@ -2033,7 +2067,7 @@ export class FakeExecutor {
           attemptId: attempt.id,
           ownerToken: this.orchestrator.ownerToken,
           failureCode: error.code,
-          failureMessage: `Agent 结果回合失败（${error.code}），Run 已失败`
+          failureMessage: `Agent 结果回合失败（${error.code}），Run 已失败${error.detail === undefined ? "" : `：${error.detail}`}`
         });
         return;
       }

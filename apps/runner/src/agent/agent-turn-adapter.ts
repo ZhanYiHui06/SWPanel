@@ -134,11 +134,14 @@ export type AgentTurnErrorCode = (typeof AGENT_TURN_ERROR_CODES)[number];
  */
 export class AgentTurnError extends Error {
   readonly code: AgentTurnErrorCode;
+  /** Optional SANITIZED (redacted, bounded) diagnostic that is safe to show to the user. */
+  readonly detail: string | undefined;
 
-  constructor(code: AgentTurnErrorCode, message: string) {
+  constructor(code: AgentTurnErrorCode, message: string, detail?: string) {
     super(message);
     this.name = "AgentTurnError";
     this.code = code;
+    this.detail = detail;
   }
 }
 

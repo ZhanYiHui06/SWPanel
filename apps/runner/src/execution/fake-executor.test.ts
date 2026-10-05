@@ -4057,6 +4057,43 @@ describe("FakeExecutor result phase with the Codex turn adapter (P5-3)", () => {
     }
   });
 
+  it("a live (owned) agent does not get the scripted stage walk and its sanitized failure detail reaches the message", async () => {
+    const delegate = new FakeAgentAdapter();
+    const failing: AgentTurnAdapter = {
+      adapterId: delegate.adapterId,
+      adapterVersion: delegate.adapterVersion,
+      protocol: delegate.protocol,
+      protocolVersion: delegate.protocolVersion,
+      threadIdFor: (runId) => delegate.threadIdFor(runId),
+      async runTurn(): Promise<AgentTurnOutcome> {
+        throw new AgentTurnError("AGENT_RUNTIME_UNAVAILABLE", "turn failed", "model not supported");
+      }
+    };
+    const fixture = openExecFixture("exec-live-agent-progress", {
+      scenario: "success",
+      agent: failing,
+      ownsAgent: true
+    });
+    try {
+      seedRevision(fixture, "drawing-a", "revision-a1", 1, T0);
+      const run = createQueuedRun(fixture, T0);
+
+      await runToCompletion(fixture);
+
+      const events = eventsOf(fixture, run.id);
+      const stages = events.filter((event) => event.type === "StageChanged");
+      expect(stages).toHaveLength(1);
+      const progress = events.filter((event) => event.type === "ProgressUpdated");
+      expect(progress.every((event) => event.type === "ProgressUpdated" && event.progressPercent < 100)).toBe(true);
+      const row = runRow(fixture, run.id);
+      expect(row.status).toBe("FAILED");
+      expect(row.failure_code).toBe("AGENT_RUNTIME_UNAVAILABLE");
+      expect(String(row.failure_message)).toContain("model not supported");
+    } finally {
+      closeExecFixture(fixture);
+    }
+  });
+
   it("a turn that never stops prevents the cancel confirmation: FAILED/CANCEL_CLEANUP_PENDING, workspace preserved, never CANCELLED", async () => {
     // The runtime IGNORES turn/interrupt (the request times out): the interrupt
     // was never delivered, so the cancellation must not confirm — ownership is

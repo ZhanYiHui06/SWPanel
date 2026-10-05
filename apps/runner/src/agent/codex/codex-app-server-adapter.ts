@@ -731,7 +731,8 @@ export class CodexAppServerAdapter implements AgentTurnAdapter {
         writeAgentSessionRecord(workspace, { runId, attemptSequence, record: session });
         throw new AgentTurnError(
           "AGENT_RUNTIME_UNAVAILABLE",
-          "the Codex turn failed before producing a result"
+          "the Codex turn failed before producing a result",
+          sanitizeCodexTurnErrorMessage(completed.turn.errorMessage)
         );
       }
 
