@@ -93,6 +93,8 @@ export interface ThreadResumeBuildInput {
 
 export interface TurnStartBuildInput {
   threadId: string;
+  /** Optional per-turn model override (null/undefined/"" = the CLI default). */
+  model?: string | null;
   /** Controlled rendered prompt text of the attempt. */
   promptText: string;
   /** Absolute path of the derived Skill input image. */
@@ -188,6 +190,8 @@ export function buildTurnStartParams(input: TurnStartBuildInput): Record<string,
   assertWritableRoots(input.writableRoots);
   return {
     threadId: input.threadId,
+    // Optional per-turn model override (the user's Settings choice); omitted = the CLI's own default.
+    ...(input.model === undefined || input.model === null || input.model === "" ? {} : { model: input.model }),
     input: [
       { type: "text", text: input.promptText },
       { type: "localImage", path: input.localImageAbsolutePath },

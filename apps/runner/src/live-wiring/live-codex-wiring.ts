@@ -36,6 +36,8 @@ export interface LiveCodexAgentWiringOptions {
     transportFactory?: CodexTransportFactory;
     pdfiumHelperPath?: string;
     documentCloser?: SolidWorksIdentityCloser;
+    /** The user's selected model, read per turn (null = CLI default). */
+    modelProvider?: () => string | null;
 }
 
 export function buildLiveCodexAgentWiring(
@@ -50,6 +52,7 @@ export function buildLiveCodexAgentWiring(
     const client = new CodexAppServerClient({ transport });
     const agent = new CodexAppServerAdapter({
       client,
+      ...(options.modelProvider === undefined ? {} : { modelProvider: options.modelProvider }),
       // Authoritative explicit live configuration — never invented; absent
       // (undefined) is omitted so the adapter fails CLOSED to `false`. The
       // adapter option is `modelSupportsImageInput` (the wiring's own

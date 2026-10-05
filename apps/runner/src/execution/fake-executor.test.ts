@@ -4082,13 +4082,49 @@ describe("FakeExecutor result phase with the Codex turn adapter (P5-3)", () => {
 
       const events = eventsOf(fixture, run.id);
       const stages = events.filter((event) => event.type === "StageChanged");
-      expect(stages).toHaveLength(1);
+      expect(stages.map((event) => (event.type === "StageChanged" ? event.stage : ""))).toEqual(["PREPARING", "ANALYZING"]);
       const progress = events.filter((event) => event.type === "ProgressUpdated");
       expect(progress.every((event) => event.type === "ProgressUpdated" && event.progressPercent < 100)).toBe(true);
       const row = runRow(fixture, run.id);
       expect(row.status).toBe("FAILED");
       expect(row.failure_code).toBe("AGENT_RUNTIME_UNAVAILABLE");
       expect(String(row.failure_message)).toContain("model not supported");
+    } finally {
+      closeExecFixture(fixture);
+    }
+  });
+
+  it("live agent activity is published as real, capped progress while the turn runs", async () => {
+    const delegate = new FakeAgentAdapter();
+    const reporting: AgentTurnAdapter = {
+      adapterId: delegate.adapterId,
+      adapterVersion: delegate.adapterVersion,
+      protocol: delegate.protocol,
+      protocolVersion: delegate.protocolVersion,
+      threadIdFor: (runId) => delegate.threadIdFor(runId),
+      runTurn(input: AgentTurnInput): Promise<AgentTurnOutcome> {
+        input.onActivity?.({ commandCount: 40, fileChangeCount: 5, toolCount: 10, messageCount: 3 });
+        return delegate.runTurn(input);
+      }
+    };
+    const fixture = openExecFixture("exec-live-agent-activity", {
+      scenario: "success",
+      agent: reporting,
+      ownsAgent: true,
+      publishModel: true
+    });
+    try {
+      seedRevision(fixture, "drawing-a", "revision-a1", 1, T0);
+      const run = createQueuedRun(fixture, T0);
+
+      await runToCompletion(fixture);
+
+      const events = eventsOf(fixture, run.id);
+      const percents = events.flatMap((event) => (event.type === "ProgressUpdated" ? [event.progressPercent] : []));
+      const live = percents.filter((value) => value > 20 && value <= 90);
+      expect(live.length).toBeGreaterThan(0);
+      expect(events.some((event) => event.type === "StageChanged" && event.stage === "MODELING")).toBe(true);
+      expect(runRow(fixture, run.id).status).toBe("COMPLETED");
     } finally {
       closeExecFixture(fixture);
     }

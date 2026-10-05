@@ -121,6 +121,8 @@ export interface CodexAppServerAdapterOptions {
    * image support never records a claim it cannot substantiate.
    */
   modelSupportsImageInput?: boolean;
+  /** Resolves the user's selected model at turn start (null = the CLI default); read per turn so a Settings change applies immediately. */
+  modelProvider?: () => string | null;
   /** Bounded wait for the turn/completed notification (default 2 hours). */
   turnTimeoutMs?: number;
   /**
@@ -481,8 +483,11 @@ export class CodexAppServerAdapter implements AgentTurnAdapter {
   } | null = null;
   private lastSessionThreadId: string | null = null;
 
+  private readonly modelProvider: () => string | null;
+
   constructor(options: CodexAppServerAdapterOptions) {
     this.client = options.client;
+    this.modelProvider = options.modelProvider ?? (() => null);
     // Fail-closed: image support is an authoritative proven input, never a
     // hardcoded claim — absent it records false.
     this.modelSupportsImageInput = options.modelSupportsImageInput ?? false;
@@ -582,6 +587,19 @@ export class CodexAppServerAdapter implements AgentTurnAdapter {
       // Content-free current-turn activity diagnostics (never persisted on
       // success; a failed session note may attach the fixed category summary).
       activity.observeNotification(notification.method, notification.params);
+      if (input.onActivity !== undefined && notification.method !== "turn/completed") {
+        try {
+          const counts = activity.summary().counts;
+          input.onActivity({
+            commandCount: counts.get("command-execution") ?? 0,
+            fileChangeCount: counts.get("file-change") ?? 0,
+            toolCount: counts.get("tool-or-other") ?? 0,
+            messageCount: counts.get("agent-message") ?? 0
+          });
+        } catch {
+          // A progress observer must never disturb the turn.
+        }
+      }
       if (notification.method !== "item/agentMessage/delta") return;
       const params = notification.params;
       if (!isRecord(params)) return;
@@ -624,6 +642,7 @@ export class CodexAppServerAdapter implements AgentTurnAdapter {
       try {
         turnParams = buildTurnStartParams({
           threadId,
+          model: this.modelProvider(),
           promptText: input.promptText,
           localImageAbsolutePath: input.localImageAbsolutePath,
           skill: input.skill,

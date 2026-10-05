@@ -1,4 +1,4 @@
-import { Button, Dialog, InlineNotice, StatusBadge } from "@swpanel/ui";
+import { Button, Dialog, InlineNotice, Select, StatusBadge } from "@swpanel/ui";
 import { useEffect, useState } from "react";
 
 import {
@@ -10,7 +10,7 @@ import type { DrawingRepository } from "../features/bridge-repository/drawing-re
 import { describeError } from "../features/error-messages.js";
 import { resolveRepositoryMode } from "../features/repository-mode.js";
 import { useOptionalNotifications } from "../features/notifications/notification-context.js";
-import { httpSettings, type AgentAuthMode, type AgentAuthStatus, type RuntimeSettings } from "../features/settings/http-settings.js";
+import { httpSettings, type AgentAuthMode, type AgentAuthStatus, type ModelCatalog, type ModelStatus, type RuntimeSettings } from "../features/settings/http-settings.js";
 import type { SecretsStatusBridgeResult } from "../../main/bridge/bridge-contract.js";
 
 export interface SettingsPageProps {
@@ -60,6 +60,57 @@ export function SettingsPage({ drawingRepository }: SettingsPageProps): React.JS
       .catch(() => undefined);
     return () => { mounted = false; };
   }, [authModeAvailable, runtimeTick]);
+  // Model selection (Web service only): check what the account/API offers, pick one, and it
+  // applies from the next modeling turn without a restart.
+  const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalog | null>(null);
+  const [modelDraft, setModelDraft] = useState<string | null>(null);
+  const [checkingModels, setCheckingModels] = useState(false);
+  const [savingModel, setSavingModel] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!authModeAvailable) return undefined;
+    let mounted = true;
+    httpSettings.getModelStatus()
+      .then((value) => { if (mounted) setModelStatus(value); })
+      .catch(() => undefined);
+    return () => { mounted = false; };
+  }, [authModeAvailable, runtimeTick]);
+  const selectedModel = modelDraft ?? modelStatus?.model ?? "";
+  const selectedOption = modelCatalog?.models.find((item) => item.id === selectedModel);
+  async function checkModels(): Promise<void> {
+    setCheckingModels(true);
+    setModelError(null);
+    try {
+      const catalog = await httpSettings.listModels();
+      setModelCatalog(catalog);
+      setModelStatus({ model: catalog.model, source: catalog.source });
+      setModelDraft(null);
+    } catch (caught) {
+      setModelCatalog(null);
+      setModelError(describeError(caught).message);
+    } finally {
+      setCheckingModels(false);
+    }
+  }
+  async function saveModel(): Promise<void> {
+    setSavingModel(true);
+    setModelError(null);
+    try {
+      const saved = await httpSettings.setModel(selectedModel === "" ? null : selectedModel);
+      setModelStatus(saved);
+      setModelDraft(null);
+      notifications?.addToast?.({
+        tone: "success",
+        title: "模型已保存",
+        message: saved.model === null ? "将使用 Codex 的默认模型，下一次建模任务起生效。" : `下一次建模任务起使用 ${saved.model}。`
+      });
+    } catch (caught) {
+      setModelError(describeError(caught).message);
+    } finally {
+      setSavingModel(false);
+    }
+  }
   async function changeAuthMode(next: AgentAuthMode): Promise<void> {
     if (next === authMode || switchingAuth) return;
     setSwitchingAuth(true);
@@ -530,15 +581,74 @@ export function SettingsPage({ drawingRepository }: SettingsPageProps): React.JS
           </div>
         </div>
         </>)}
-        <div className="settings-row">
-          <div className="settings-row-label">
-            <div className="settings-row-name">Model</div>
-            <div className="settings-row-desc">Agent 使用的模型配置</div>
+        {!authModeAvailable ? (
+          <div className="settings-row">
+            <div className="settings-row-label">
+              <div className="settings-row-name">Model</div>
+              <div className="settings-row-desc">Agent 使用的模型配置</div>
+            </div>
+            <div className="settings-row-value">
+              <span className="text-mono text-sm">{runtime?.model ?? "由 Codex 服务端配置"}</span>
+            </div>
           </div>
-          <div className="settings-row-value">
-            <span className="text-mono text-sm">{runtime?.model ?? "由 Codex 服务端配置"}</span>
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="settings-row-name">模型</div>
+                <div className="settings-row-desc">
+                  当前：{modelStatus === null ? "读取中…" : modelStatus.model ?? "Codex 默认模型"}
+                  {modelStatus?.source === "env" ? "（来自环境变量 SWPANEL_AGENT_MODEL）" : ""}。建模需要支持图片输入的模型；保存后从下一次建模任务起生效，无需重启
+                </div>
+              </div>
+              <div className="settings-row-value">
+                <div className="flex-row-gap-3" style={{ justifyContent: "flex-end", flexWrap: "wrap" }}>
+                  {modelCatalog !== null && (
+                    <Select
+                      selectProps={{ "aria-label": "选择模型", disabled: savingModel }}
+                      value={selectedModel}
+                      onValueChange={(value) => setModelDraft(value)}
+                      options={[
+                        { value: "", label: "使用默认模型（由 Codex 决定）" },
+                        ...(selectedModel !== "" && selectedOption === undefined ? [{ value: selectedModel, label: `${selectedModel}（当前，不在可用列表中）` }] : []),
+                        ...modelCatalog.models.map((item) => ({
+                          value: item.id,
+                          label: `${item.displayName}${item.id !== item.displayName ? `（${item.id}）` : ""}${item.supportsImage === false ? " · 不支持图片" : ""}${item.isDefault ? " · 默认" : ""}`
+                        }))
+                      ]}
+                    />
+                  )}
+                  <Button variant="secondary" size="sm" disabled={checkingModels || !secretsAvailable} onClick={() => void checkModels()}>
+                    {checkingModels ? "正在检查…" : modelCatalog === null ? "检查可用模型" : "重新检查"}
+                  </Button>
+                  {modelCatalog !== null && (
+                    <Button variant="primary" size="sm" disabled={savingModel || selectedModel === (modelStatus?.model ?? "")} onClick={() => void saveModel()}>
+                      {savingModel ? "正在保存…" : "保存模型"}
+                    </Button>
+                  )}
+                </div>
+                {modelCatalog !== null && (
+                  <div className="text-xs text-muted" style={{ marginTop: 8, textAlign: "right" }}>
+                    {modelCatalog.models.length === 0 ? "未检测到可用模型" : `检测到 ${modelCatalog.models.length} 个可用模型`}
+                    {selectedOption?.description ? ` · ${selectedOption.description}` : ""}
+                  </div>
+                )}
+              </div>
+            </div>
+            {selectedOption?.supportsImage === false && (
+              <div className="settings-notice">
+                <InlineNotice tone="warning" title="该模型不支持图片输入">
+                  自动建模需要把图纸作为图片发送给模型，选择此模型会导致建模任务失败。
+                </InlineNotice>
+              </div>
+            )}
+            {modelError !== null && (
+              <div className="settings-notice">
+                <InlineNotice tone="error" title="模型操作失败" role="alert">{modelError}</InlineNotice>
+              </div>
+            )}
+          </>
+        )}
         <div className="settings-row">
           <div className="settings-row-label">
             <div className="settings-row-name">连接状态</div>

@@ -14,6 +14,15 @@ export interface RuntimeSettings {
   model: string | null;
   reason: string;
 }
+export interface ModelOption {
+  id: string;
+  displayName: string;
+  description: string | null;
+  supportsImage: boolean | null;
+  isDefault: boolean;
+}
+export interface ModelStatus { model: string | null; source: "setting" | "env" | "default" }
+export interface ModelCatalog extends ModelStatus { models: ModelOption[]; authMode: AgentAuthMode }
 export interface ApiKeyStatus { hasApiKey: boolean; maskedApiKey: string | null }
 export class SettingsError extends Error {
   constructor(readonly code: string, message: string) { super(message); }
@@ -44,5 +53,8 @@ export const httpSettings = {
   clearApiKey: async () => ({ ok: true as const, data: await transport().post<ApiKeyStatus>("/api/settings/api-key", { apiKey: null }) }),
   getAuthStatus: () => get<AgentAuthStatus>("/api/settings/auth-mode"),
   setAuthMode: (authMode: AgentAuthMode) => transport().post<AgentAuthStatus>("/api/settings/auth-mode", { authMode }),
+  getModelStatus: () => get<ModelStatus>("/api/settings/model"),
+  listModels: () => get<ModelCatalog>("/api/settings/models"),
+  setModel: (model: string | null) => transport().post<ModelStatus>("/api/settings/model", { model }),
   testConnection: () => transport().post<{ connected: true }>("/api/settings/test-connection", {})
 };

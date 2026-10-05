@@ -76,6 +76,18 @@ export interface AgentResultInput {
   produceClarification?: boolean;
 }
 
+/**
+ * Content-free live activity of a running turn (fixed counters only — never
+ * commands, paths, reasoning or output text). Delivered best-effort and
+ * unthrottled; the consumer decides how often to publish it.
+ */
+export interface AgentActivityUpdate {
+  commandCount: number;
+  fileChangeCount: number;
+  toolCount: number;
+  messageCount: number;
+}
+
 /** The frozen inputs of ONE Agent result turn (superset of the Phase 4 result input). */
 export interface AgentTurnInput extends AgentResultInput {
   /** Absolute attempt-workspace root the runtime may write into (its ONLY writable root). */
@@ -96,6 +108,8 @@ export interface AgentTurnInput extends AgentResultInput {
    * `thread/resume` is attempted.
    */
   priorSession?: AgentSessionRecord | null;
+  /** Optional live activity observer of the running turn; must never throw into the turn. */
+  onActivity?: (update: AgentActivityUpdate) => void;
 }
 
 /** The identity of the turn a cooperative interrupt must target. */

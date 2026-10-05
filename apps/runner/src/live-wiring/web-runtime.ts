@@ -20,7 +20,7 @@ const SOLIDWORKS_REASON_TEXT: Record<string, string> = {
 };
 
 /** Server environment is the only source of executable/skill configuration. No model turn runs during discovery. */
-export async function configureWebRuntime(env: NodeJS.ProcessEnv = process.env, platform: string = process.platform, authMode: AgentAuthMode = "api_key", skillSearch: SkillSearchOptions = {}): Promise<{ runnerConfig?: RunnerConfig; runtime: RuntimeSettings }> {
+export async function configureWebRuntime(env: NodeJS.ProcessEnv = process.env, platform: string = process.platform, authMode: AgentAuthMode = "api_key", skillSearch: SkillSearchOptions = {}, modelProvider?: () => string | null): Promise<{ runnerConfig?: RunnerConfig; runtime: RuntimeSettings }> {
   // Without an explicit skill path, look for the skill in the usual agent skill folders.
   let discovered: ReturnType<typeof discoverSkill> = null;
   if (!env[LIVE_CODEX_SKILL_PATH_ENV]?.trim()) {
@@ -44,7 +44,7 @@ export async function configureWebRuntime(env: NodeJS.ProcessEnv = process.env, 
   if (!codex.available || !codex.protocol || !codex.skillDiscovered || !codex.skillPathVerified || codex.modelImageInputSupported !== true) { runtime.reason = "Codex 协议、技能或图像输入检测未通过"; return { runtime }; }
   const skillHash = hashSkillDirectory(config.skillPath);
   const preflight = new PreflightGate(new RealPreflightProbe({ skillRootPath: config.skillPath, runtime: { probe: () => runtimeProbeResultOf(codex) }, liveCodex: codex, modelImageInputSupported: true, solidworks: { probe: () => solidWorksProbeResultOf(solidworks) } }));
-  const wiring = buildLiveCodexAgentWiring(config, { transportFactory });
+  const wiring = buildLiveCodexAgentWiring(config, { transportFactory, ...(modelProvider === undefined ? {} : { modelProvider }) });
   runtime.modelingConfigured = true;
   runtime.reason = provider.model === null ? "真实执行环境检测通过；模型使用 Codex 服务端配置" : "真实执行环境检测通过";
   return { runtime, runnerConfig: { ...wiring, expectedSolidWorksVersion: solidworks.version, runProfile: { ...DEFAULT_RUN_PROFILE, skill: { name: config.skillName, sha256: skillHash }, agentConfigId: "web-live-codex" }, preflight } };

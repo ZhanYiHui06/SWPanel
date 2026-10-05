@@ -102,4 +102,35 @@ describe("server credentials", () => {
     await expect(service.testConnection()).resolves.toEqual({ connected: true });
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it("selects a model: the Settings choice wins over the env default and persists", () => {
+    const dataRoot = root();
+    const env = { SWPANEL_AGENT_MODEL: "env-model" };
+    const service = new SettingsService({ dataRoot, env });
+    expect(service.getModelStatus()).toEqual({ model: "env-model", source: "env" });
+    expect(service.setModel("gpt-5.1-codex")).toEqual({ model: "gpt-5.1-codex", source: "setting" });
+    expect(new SettingsService({ dataRoot, env }).getModel()).toBe("gpt-5.1-codex");
+    expect(service.setModel(null)).toEqual({ model: "env-model", source: "env" });
+    expect(new SettingsService({ dataRoot, env: {} }).getModelStatus()).toEqual({ model: null, source: "default" });
+    expect(() => service.setModel("bad model; rm")).toThrow(SettingsInputError);
+    // Saving a model never drops the stored API key / auth mode (and vice versa).
+    service.setApiKey("sk-private-1234");
+    service.setModel("m1");
+    service.setAuthMode("api_key");
+    const reopened = new SettingsService({ dataRoot, env: {} });
+    expect(reopened.getModel()).toBe("m1");
+    expect(reopened.getApiKeyStatus().hasApiKey).toBe(true);
+  });
+  it("lists models through the injected lister and refuses without credentials", async () => {
+    const service = new SettingsService({ dataRoot: root(), env: {} });
+    await expect(service.listModels()).rejects.toThrow("未启用");
+    const lister = vi.fn().mockResolvedValue([{ id: "m1", displayName: "M1", description: null, supportsImage: true, isDefault: true }]);
+    service.setModelLister(lister);
+    await expect(service.listModels()).rejects.toThrow("请先保存");
+    service.setApiKey("sk-private-1234");
+    const catalog = await service.listModels();
+    expect(lister).toHaveBeenCalledWith("api_key", "sk-private-1234");
+    expect(catalog).toMatchObject({ model: null, source: "default", authMode: "api_key", models: [{ id: "m1" }] });
+    service.setModelLister(() => Promise.reject(new Error("boom")));
+    await expect(service.listModels()).rejects.toThrow("检查模型失败：boom");
+  });
 });

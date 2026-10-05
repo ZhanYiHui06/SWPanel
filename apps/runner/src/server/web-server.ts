@@ -331,7 +331,13 @@ export class WebServer {
           if (req.method === "GET" && url.pathname === "/api/settings/runtime") data = this.settings.getRuntime();
           else if (req.method === "GET" && url.pathname === "/api/settings/api-key") data = this.settings.getApiKeyStatus();
           else if (req.method === "GET" && url.pathname === "/api/settings/auth-mode") data = this.settings.getAuthStatus();
-          else if (req.method === "POST" && url.pathname === "/api/settings/auth-mode") {
+          else if (req.method === "GET" && url.pathname === "/api/settings/model") data = this.settings.getModelStatus();
+          else if (req.method === "GET" && url.pathname === "/api/settings/models") data = await this.settings.listModels();
+          else if (req.method === "POST" && url.pathname === "/api/settings/model") {
+            const body = await this.readJson(req, 1024);
+            if (!record(body) || Object.keys(body).length !== 1 || !("model" in body)) throw new WebRequestError(400, "INVALID_PAYLOAD", "model is required");
+            data = this.settings.setModel(body.model);
+          } else if (req.method === "POST" && url.pathname === "/api/settings/auth-mode") {
             const body = await this.readJson(req, 1024);
             if (!record(body) || Object.keys(body).length !== 1 || !("authMode" in body)) throw new WebRequestError(400, "INVALID_PAYLOAD", "authMode is required");
             data = this.settings.setAuthMode(body.authMode);

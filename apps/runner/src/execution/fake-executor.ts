@@ -6,6 +6,7 @@ import type {
   PreflightReport,
   PreflightScenario,
   RunAttempt,
+  RunEventPayload,
   RunFailureCode,
   RunStage
 } from "@swpanel/domain";
@@ -28,6 +29,7 @@ import {
   AgentTurnError,
   toAgentTurnAdapter,
   type AgentTurnAdapter,
+  type AgentActivityUpdate,
   type AgentTurnInput,
   type AgentTurnOutcome
 } from "../agent/agent-turn-adapter.js";
@@ -359,6 +361,12 @@ const STAGE_ACTIVITIES: Readonly<Record<RunStage, string>> = {
 
 /** Shown while a real agent turn runs (no fake per-stage progress is published meanwhile). */
 const LIVE_AGENT_ACTIVITY = "Codex 正在分析图纸并建模，可能需要几分钟";
+
+const LIVE_PROGRESS_FLOOR = 20 as const;
+const LIVE_PROGRESS_CEILING = 90 as const;
+/** Observed runtime events at which ~63% of the floor-to-ceiling range is reached. */
+const LIVE_PROGRESS_SCALE = 150 as const;
+const LIVE_PROGRESS_MIN_INTERVAL_MS = 2_000 as const;
 
 /** The six user-visible stages walked in order by the success path. */
 const ALL_STAGES: readonly RunStage[] = [
@@ -1920,6 +1928,65 @@ export class FakeExecutor {
         // The fake executor has NO skill resolver (external skill resolution is
         // a later batch): the configured value is passed verbatim.
         resolvedPath: this.skillResolvedPath
+      },
+      ...(this.liveAgent && this.scenario === "success" && !produceClarification
+        ? { onActivity: this.createLiveProgressObserver(attempt) }
+        : {})
+    };
+  }
+
+  /**
+   * Publishes REAL, content-free progress while a live agent turn runs: the
+   * stage moves ANALYZING -> MODELING once the runtime starts doing work, and
+   * the percentage is an estimate derived from how much runtime activity has
+   * been observed (it never reaches 100% — completion is owned by the
+   * validated terminal event). Throttled; never throws into the turn.
+   */
+  private createLiveProgressObserver(attempt: RunAttempt): (update: AgentActivityUpdate) => void {
+    const startedAt = Date.now();
+    let lastEmitAt = 0;
+    let lastPercent: number = LIVE_PROGRESS_FLOOR;
+    let stage: RunStage = "ANALYZING";
+    try {
+      this.runs.appendRunEvents({
+        runId: attempt.runId,
+        attemptId: attempt.id,
+        entries: [
+          { payload: { type: "StageChanged", stage, activity: STAGE_ACTIVITIES.ANALYZING }, occurredAt: this.nowIso() },
+          { payload: { type: "ProgressUpdated", progressPercent: lastPercent, activity: STAGE_ACTIVITIES.ANALYZING }, occurredAt: this.nowIso() }
+        ]
+      });
+    } catch {
+      // Advisory only.
+    }
+    return (update) => {
+      try {
+        const now = Date.now();
+        if (now - lastEmitAt < LIVE_PROGRESS_MIN_INTERVAL_MS) return;
+        const work = update.commandCount + update.fileChangeCount + update.toolCount;
+        const entries: { payload: RunEventPayload; occurredAt: string }[] = [];
+        const nextStage: RunStage = work > 0 ? "MODELING" : "ANALYZING";
+        const percent = Math.max(
+          lastPercent,
+          Math.min(
+            LIVE_PROGRESS_CEILING,
+            Math.round(LIVE_PROGRESS_FLOOR + (LIVE_PROGRESS_CEILING - LIVE_PROGRESS_FLOOR) * (1 - Math.exp(-work / LIVE_PROGRESS_SCALE)))
+          )
+        );
+        const seconds = Math.floor((now - startedAt) / 1000);
+        const elapsed = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+        const activity = `${STAGE_ACTIVITIES[nextStage]} · 已收到 ${work + update.messageCount} 条运行事件 · 用时 ${elapsed}`;
+        if (nextStage !== stage) {
+          stage = nextStage;
+          entries.push({ payload: { type: "StageChanged", stage, activity }, occurredAt: this.nowIso() });
+        }
+        lastPercent = percent;
+        entries.push({ payload: { type: "ProgressUpdated", progressPercent: percent, activity }, occurredAt: this.nowIso() });
+        lastEmitAt = now;
+        this.runs.appendRunEvents({ runId: attempt.runId, attemptId: attempt.id, entries });
+        this.renewLease(attempt);
+      } catch {
+        // Progress is advisory: a lost lease / closed run must not break the turn.
       }
     };
   }

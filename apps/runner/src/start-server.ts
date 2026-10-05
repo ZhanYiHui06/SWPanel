@@ -6,6 +6,9 @@ import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { SettingsService } from "./server/settings-service.js";
 import { configureWebRuntime } from "./live-wiring/web-runtime.js";
+import { listApiModels, listCodexModels } from "./live-wiring/model-catalog.js";
+import { resolveWebCodexProvider, webCodexTransportFactory } from "./live-wiring/web-codex-provider.js";
+import { CODEX_APP_SERVER_COMMAND } from "./index.js";
 
 function parsePort(value: string | undefined): number {
   if (value === undefined || value === "") return 3001;
@@ -39,8 +42,18 @@ async function main() {
     // Credentials are loaded once, before spawning any Codex child; the runtime description is attached afterwards.
     const settingsService = new SettingsService({ dataRoot });
     console.log("正在检测建模环境（SolidWorks 检测最长约 1 分钟，完成后开始提供服务）...");
-    const { runnerConfig, runtime } = await configureWebRuntime(process.env, process.platform, settingsService.getAuthMode());
+    const { runnerConfig, runtime } = await configureWebRuntime(process.env, process.platform, settingsService.getAuthMode(), {}, () => settingsService.getModel());
     settingsService.setRuntime(runtime);
+    settingsService.setModelLister((authMode, apiKey) => {
+      const env = { ...process.env };
+      if (authMode === "api_key") {
+        if (apiKey === null) return Promise.reject(new Error("请先保存 API Key"));
+        return listApiModels(runtime.baseUrl, apiKey);
+      }
+      const command = env.SWPANEL_LIVE_CODEX_EXECUTABLE?.trim() || CODEX_APP_SERVER_COMMAND;
+      const provider = resolveWebCodexProvider(command, env, "codex_cli");
+      return listCodexModels(webCodexTransportFactory(provider));
+    });
     // The built web UI (apps/desktop/dist/renderer) is served from the same port when present.
     const configuredWebRoot = process.env.SWPANEL_WEB_ROOT?.trim();
     const webRoot = [configuredWebRoot, fileURLToPath(new URL("../../desktop/dist/renderer", import.meta.url))].find((candidate): candidate is string => candidate !== undefined && candidate !== "" && existsSync(join(candidate, "index.html"))) ?? null;

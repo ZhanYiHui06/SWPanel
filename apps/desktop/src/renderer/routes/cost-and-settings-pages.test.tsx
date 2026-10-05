@@ -435,6 +435,49 @@ describe("设置", () => {
     }
   });
 
+  it("checks the available models and saves the selected one", async () => {
+    window.history.pushState({}, "", "/?mode=http");
+    let status = { model: null as string | null, source: "default" };
+    const saved: unknown[] = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      let data: unknown = { hasApiKey: true, maskedApiKey: "••••1234" };
+      if (path.endsWith("/runtime")) data = { platform: "win32", modelingConfigured: false, solidWorksVersion: null, skillName: null, baseUrl: "https://api.openai.com/v1", model: null, reason: "x" };
+      else if (path.endsWith("/auth-mode")) data = { authMode: "api_key", codexLogin: { loggedIn: false, method: null } };
+      else if (path.endsWith("/api/settings/models")) data = { ...status, authMode: "api_key", models: [
+        { id: "vision-1", displayName: "Vision 1", description: "supports images", supportsImage: true, isDefault: true },
+        { id: "text-1", displayName: "Text 1", description: null, supportsImage: false, isDefault: false }
+      ] };
+      else if (path.endsWith("/api/settings/model")) {
+        if (init?.method === "POST") {
+          const body = JSON.parse(init.body as string) as { model: string | null };
+          saved.push(body);
+          status = { model: body.model, source: body.model === null ? "default" : "setting" };
+        }
+        data = status;
+      }
+      return Promise.resolve(new Response(JSON.stringify({ ok: true, data }), { status: 200 }));
+    }));
+    try {
+      const user = userEvent.setup();
+      renderSettingsWithToasts(MockRepository.create("run-running"));
+      expect(screen.queryByLabelText("选择模型")).not.toBeInTheDocument();
+      await user.click(await screen.findByRole("button", { name: "检查可用模型" }));
+      const select = await screen.findByLabelText("选择模型");
+      expect(screen.getByText("检测到 2 个可用模型")).toBeInTheDocument();
+
+      await user.selectOptions(select, "text-1");
+      expect(await screen.findByText("该模型不支持图片输入")).toBeInTheDocument();
+      await user.selectOptions(select, "vision-1");
+      expect(screen.queryByText("该模型不支持图片输入")).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "保存模型" }));
+      expect(await screen.findByText("模型已保存")).toBeInTheDocument();
+      expect(saved).toEqual([{ model: "vision-1" }]);
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
+
   it("expands the collapsed advanced group", async () => {
     const repository = MockRepository.create("run-running");
     const user = userEvent.setup();

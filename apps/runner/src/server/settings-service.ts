@@ -1,6 +1,7 @@
 import { chmodSync, closeSync, existsSync, fsyncSync, lstatSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { isValidModelId, type ModelOption } from "../live-wiring/model-catalog.js";
 import { isAgentAuthMode, readCodexLoginStatus, type AgentAuthMode, type CodexLoginStatus } from "../live-wiring/codex-login.js";
 
 export interface RuntimeSettings {
@@ -17,6 +18,11 @@ export interface RuntimeSettings {
   reason: string;
 }
 export interface AgentAuthStatus { authMode: AgentAuthMode; codexLogin: CodexLoginStatus }
+/** The model selection: the Settings choice wins over `SWPANEL_AGENT_MODEL`; neither means the CLI default. */
+export interface ModelStatus { model: string | null; source: "setting" | "env" | "default" }
+export interface ModelCatalog extends ModelStatus { models: ModelOption[]; authMode: AgentAuthMode }
+/** Fetches the models selectable with the current credentials (injected by the server wiring). */
+export type ModelLister = (authMode: AgentAuthMode, apiKey: string | null) => Promise<ModelOption[]>;
 export interface ApiKeyStatus { hasApiKey: boolean; maskedApiKey: string | null }
 /** Client-correctable settings failure (bad input, missing key, upstream rejected). Maps to HTTP 400. */
 export class SettingsInputError extends Error {
@@ -38,6 +44,8 @@ export class SettingsService {
   private readonly file: string;
   private key: string | null;
   private authMode: AgentAuthMode = "api_key";
+  private model: string | null = null;
+  private modelLister: ModelLister | null = null;
   private options: SettingsOptions;
   constructor(options: SettingsOptions) {
     this.options = options;
@@ -54,6 +62,10 @@ export class SettingsService {
         if (!isAgentAuthMode(stored.authMode)) throw new Error("服务器凭据文件格式无效");
         this.authMode = stored.authMode;
       }
+      if ("model" in stored && stored.model !== undefined && stored.model !== null) {
+        if (!isValidModelId(stored.model)) throw new Error("服务器凭据文件格式无效");
+        this.model = stored.model;
+      }
 
     } else this.key = (options.env ?? process.env).OPENAI_API_KEY?.trim() || null;
     if (this.key !== null && (this.key.length < 8 || this.key.length > 4096 || /[\r\n]/.test(this.key))) throw new Error("服务器 API Key 格式无效");
@@ -65,7 +77,8 @@ export class SettingsService {
     this.options = { ...this.options, runtime };
   }
   /** Same-directory temp file + fsync + rename + directory fsync; a crash leaves old or new content, never an empty file. */
-  private persist(value: { apiKey: string | null; authMode: AgentAuthMode }): void {
+  private persist(input: { apiKey: string | null; authMode: AgentAuthMode; model?: string | null }): void {
+    const value = { ...input, model: input.model === undefined ? this.model : input.model };
     const temp = `${this.file}.${randomUUID()}.tmp`;
     try {
       const fd = openSync(temp, "wx", 0o600);
@@ -89,7 +102,7 @@ export class SettingsService {
     }
   }
   getRuntime(): RuntimeSettings {
-    return this.options.runtime ?? { authMode: this.authMode, platform: process.platform, modelingConfigured: false, solidWorksVersion: null, skillName: null, baseUrl: (this.options.env ?? process.env).OPENAI_BASE_URL ?? "https://api.openai.com/v1", model: null, reason: "建模执行器未配置" };
+    return this.options.runtime ? { ...this.options.runtime, model: this.getModel() ?? this.options.runtime.model } : { authMode: this.authMode, platform: process.platform, modelingConfigured: false, solidWorksVersion: null, skillName: null, baseUrl: (this.options.env ?? process.env).OPENAI_BASE_URL ?? "https://api.openai.com/v1", model: this.getModel(), reason: "建模执行器未配置" };
   }
   getApiKeyStatus(): ApiKeyStatus {
     return { hasApiKey: this.key !== null, maskedApiKey: this.key ? `••••${this.key.slice(-4)}` : null };
@@ -108,6 +121,36 @@ export class SettingsService {
     this.key = null;
     delete (this.options.env ?? process.env).OPENAI_API_KEY;
     return this.getApiKeyStatus();
+  }
+  /** The model passed to Codex per turn; read at every turn start so a change applies immediately. */
+  getModel(): string | null {
+    return this.getModelStatus().model;
+  }
+  getModelStatus(): ModelStatus {
+    if (this.model !== null) return { model: this.model, source: "setting" };
+    const fromEnv = (this.options.env ?? process.env).SWPANEL_AGENT_MODEL?.trim();
+    return fromEnv ? { model: fromEnv, source: "env" } : { model: null, source: "default" };
+  }
+  /** Saves the selected model (null = clear and use the default). Takes effect from the next modeling turn. */
+  setModel(model: unknown): ModelStatus {
+    if (model !== null && !isValidModelId(model)) throw new SettingsInputError("模型名称无效");
+    this.persist({ apiKey: this.key, authMode: this.authMode, model });
+    this.model = model;
+    return this.getModelStatus();
+  }
+  setModelLister(lister: ModelLister): void {
+    this.modelLister = lister;
+  }
+  /** Asks the account/API which models are available right now. */
+  async listModels(): Promise<ModelCatalog> {
+    if (this.modelLister === null) throw new SettingsInputError("当前服务未启用模型检测");
+    if (this.authMode === "codex_cli") {
+      if (!readCodexLoginStatus(this.options.env ?? process.env).loggedIn) throw new SettingsInputError("未检测到本机 Codex CLI 登录，请先在服务器上运行 codex login");
+    } else if (!this.key) throw new SettingsInputError("请先保存 API Key");
+    let models: ModelOption[];
+    try { models = await this.modelLister(this.authMode, this.key); }
+    catch (error) { throw new SettingsInputError(error instanceof Error && error.message.length > 0 ? `检查模型失败：${error.message}` : "检查模型失败"); }
+    return { ...this.getModelStatus(), models, authMode: this.authMode };
   }
   getAuthMode(): AgentAuthMode {
     return this.authMode;
